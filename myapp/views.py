@@ -6,8 +6,16 @@ from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from .models import User, Token  # Assuming these models are in the same app
-from .serializers import UserSerializer
 import uuid
+from .models import HiddenGem
+from .serializers import HiddenGemSerializer
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.http import Http404
+from .models import Guide
+from .serializers import GuideSerializer
+from .permissions import IsAdminUser
 from datetime import datetime, timedelta
 from django.core.mail import send_mail
 def home(request):
@@ -151,8 +159,8 @@ class RegisterUserView(APIView):
         send_mail(
             'Your OTP Code',
             f'Your OTP code is {otp_code}. It will expire in 5 minutes.'
-            f'jo me aatlu karyu have aakho project kari deje!',
-            'your-email@example.com',  # Replace with your email
+            f'',
+            'Dungeon0559@gmail.com',  # Replace with your email
             [data['email']],
             fail_silently=False,
         )
@@ -188,3 +196,118 @@ class VerifyOTPAndRegisterView(APIView):
         user_data = UserSerializer(user).data
 
         return Response({'message': 'User registered successfully', 'user': user_data}, status=201)
+
+
+# hidden gemss
+
+# views.py
+
+class HiddenGemList(APIView):
+    permission_classes = [AllowAny]
+    def get(self, request):
+        gems = HiddenGem.objects.all()
+        serializer = HiddenGemSerializer(gems, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = HiddenGemSerializer(data=request.data)
+        if serializer.is_valid():
+            gem = serializer.save()
+            return Response(HiddenGemSerializer(gem).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class HiddenGemDetail(APIView):
+    permission_classes = [IsAdminUser]
+    def get_object(self, pk):
+        try:
+            return HiddenGem.objects.get(id=pk)
+        except :
+            return None
+
+    def get(self, request, pk):
+        gem = self.get_object(pk)
+        if gem is None:
+            return Response({"error": "Package not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = HiddenGemSerializer(gem)
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        gem = self.get_object(pk)
+        if gem is None:
+            return Response({"error": "Package not found"},status=status.HTTP_404_NOT_FOUND)
+        serializer = HiddenGemSerializer(gem, data=request.data ,partial=True)
+        if serializer.is_valid():
+            gem = serializer.save()
+            return Response(HiddenGemSerializer(gem).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        gem = self.get_object(pk)
+        if gem is None:
+            return Response({"error": "Package not found"}, status=status.HTTP_404_NOT_FOUND)
+        gem.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# guide API
+
+
+class GuideListCreateAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        """
+        Retrieve all guides. Only accessible to admin users.
+        """
+        guides = Guide.objects.all()
+        serializer = GuideSerializer(guides, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """
+        Create a new guide. Only accessible to admin users.
+        """
+        serializer = GuideSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GuideDetailAPIView(APIView):
+    permission_classes = [IsAdminUser]  # Only admin users can access this view
+
+    def get_object(self, pk):
+        try:
+            return Guide.objects.get(pk=pk)
+        except :
+            raise Http404
+
+    def get(self, request, pk):
+        """
+        Retrieve a specific guide by ID.
+        """
+        guide = self.get_object(pk)
+        serializer = GuideSerializer(guide)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request, pk):
+        """
+        Update a specific guide by ID.
+        """
+        guide = self.get_object(pk)
+        serializer = GuideSerializer(guide, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        """
+        Delete a specific guide by ID.
+        """
+        guide = self.get_object(pk)
+        guide.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+

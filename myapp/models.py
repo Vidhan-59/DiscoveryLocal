@@ -1,12 +1,72 @@
 import mongoengine as me
 from datetime import datetime, timedelta
 
+class HiddenGem(me.Document):
+    name = me.StringField(required=True, max_length=200)
+    description = me.StringField()
+    state = me.StringField(required=True, max_length=100)
+    date = me.DateTimeField()
+    photos = me.ListField(me.URLField())
+    rating = me.FloatField()
+    number_of_person_views = me.IntField()
+    price = me.FloatField()
+    best_time = me.StringField()
+    additional_info = me.StringField()
+
+    meta = {
+        'collection': 'hidden_gems',
+        'indexes': [
+            'state',
+            'rating',
+        ]
+    }
+
+class Guide(me.Document):
+    name = me.StringField(required=True, max_length=200)
+    price = me.FloatField(required=True)
+    available_dates = me.ListField(me.DateTimeField())  # Dates when the guide is available
+
+    meta = {
+        'collection': 'guides',
+        'indexes': [
+            'name',
+            'price',
+        ]
+    }
+
+class CustomPackage(me.Document):
+    name = me.StringField(required=True, max_length=200)
+    places = me.ListField(me.ReferenceField(HiddenGem))
+    state = me.StringField(required=True, max_length=100)
+    price = me.FloatField()
+    number_of_persons = me.IntField()
+    user = me.ReferenceField('User')
+    booked_at = me.DateTimeField(default=datetime.utcnow)
+    guide = me.ReferenceField(Guide, null=True)  # Optional guide reference
+
+    meta = {
+        'collection': 'custom_packages',
+    }
+
+class BookingHistory(me.EmbeddedDocument):
+    package = me.ReferenceField(CustomPackage)
+    guide = me.ReferenceField(Guide, null=True)  # Optional guide reference
+    booked_at = me.DateTimeField(default=datetime.utcnow)
+    guide_price = me.FloatField(default=0.0)  # Store the guide's price
+
+
+import mongoengine as me
+
+
 class User(me.Document):
+    ROLE_CHOICES = ('ADMIN', 'GUIDE', 'USER')
     username = me.StringField(required=True, unique=True, max_length=100)
     email = me.EmailField(required=True, unique=True)
     password = me.StringField(required=True)
     contact_number = me.StringField(required=True, max_length=15)
     state = me.StringField(required=True, max_length=100)
+    role = me.StringField(required=True, choices=ROLE_CHOICES, default='USER')  # Default role is 'normal_user'
+    booking_history = me.EmbeddedDocumentListField('BookingHistory')
 
     meta = {
         'collection': 'users',
@@ -16,21 +76,15 @@ class User(me.Document):
         ]
     }
 
-class Token(me.Document):
-    user = me.ReferenceField(User, required=True)
-    key = me.StringField(required=True, unique=True)
-    created_at = me.DateTimeField(default=datetime.utcnow)
-    expires_at = me.DateTimeField(default=lambda: datetime.utcnow() + timedelta(days=7))  # Token valid for 7 days by default
+    def is_admin(self):
+        return self.role == 'ADMIN'
 
-    meta = {
-        'collection': 'tokens',
-    }
+    def is_guide(self):
+        return self.role == 'GUIDE'
 
-    def is_valid(self):
-        return self.expires_at > datetime.utcnow() if self.expires_at else True
+    def is_normal_user(self):
+        return self.role == 'USER'
 
-import mongoengine as me
-from datetime import datetime, timedelta
 
 class OTP(me.Document):
     email = me.EmailField(required=True)
@@ -45,3 +99,16 @@ class OTP(me.Document):
 
     def is_expired(self):
         return self.expires_at < datetime.utcnow()
+
+class Token(me.Document):
+    user = me.ReferenceField(User, required=True)
+    key = me.StringField(required=True, unique=True)
+    created_at = me.DateTimeField(default=datetime.utcnow)
+    expires_at = me.DateTimeField(default=lambda: datetime.utcnow() + timedelta(days=7))  # Token valid for 7 days by default
+
+    meta = {
+        'collection': 'tokens',
+    }
+
+    def is_valid(self):
+        return self.expires_at > datetime.utcnow() if self.expires_at else True
