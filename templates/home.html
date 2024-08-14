@@ -1,0 +1,94 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wanderlust Travels</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav id="navbar">
+        <div class="logo">Wanderlust Travels</div>
+        <ul class="nav-links" id="nav-links">
+            <li><a href="#">Home</a></li>
+            <li><a href="#">Destinations</a></li>
+            <li><a href="#">Tours</a></li>
+            <li><a href="#">About Us</a></li>
+            <li><a href="#">Contact</a></li>
+        </ul>
+        <div class="burger" id="burger">
+            <div class="line1"></div>
+            <div class="line2"></div>
+            <div class="line3"></div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Explore the World with Us</h1>
+            <p>Discover unforgettable experiences, tailored just for you.</p>
+            <a href="#" class="btn">Start Your Journey</a>
+        </div>
+    </section>
+
+    <!-- Featured Tours -->
+    <section class="tours">
+        <h2>Featured Tours</h2>
+        <div class="tour-cards">
+
+            <div class="tour-card">
+                <img src="https://via.placeholder.com/300x200" alt="Tour Image">
+                <h3>Tropical Paradise</h3>
+                <p>Experience the serene beaches and vibrant culture.</p>
+            </div>
+
+            <div class="tour-card">
+                <img src="https://via.placeholder.com/300x200" alt="Tour Image">
+                <h3>Mountain Adventure</h3>
+                <p>Embark on a thrilling journey through the peaks.</p>
+            </div>
+
+            <div class="tour-card">
+                <img src="https://via.placeholder.com/300x200" alt="Tour Image">
+                <h3>City Lights</h3>
+                <p>Dive into the heart of bustling metropolitan life.</p>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="testimonials">
+        <h2>What Our Travelers Say</h2>
+        <div class="testimonial-cards">
+
+            <div class="testimonial-card">
+                <p>"An unforgettable experience! Everything was perfectly organized."</p>
+                <h4>- Sarah L.</h4>
+            </div>
+
+            <div class="testimonial-card">
+                <p>"Best travel agency ever! Highly recommended."</p>
+                <h4>- Mark D.</h4>
+            </div>
+
+            <div class="testimonial-card">
+                <p>"They took care of every detail. I just relaxed and enjoyed."</p>
+                <h4>- Emily R.</h4>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2024 Wanderlust Travels. All rights reserved.</p>
+    </footer>
+
+    <script src="{% static 'js/script.js' %}"></script>
+</body>
+</html>
