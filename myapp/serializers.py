@@ -1,12 +1,23 @@
-import bcrypt
 import re
 import bcrypt
 from rest_framework import serializers
-from .models import HiddenGem
-from .models import User
+from .models import *
+import bson
+
+class ObjectIdField(serializers.Field):
+    def to_representation(self, value):
+        # Convert ObjectId to string for serialization
+        return str(value) if isinstance(value, bson.ObjectId) else value
+
+    def to_internal_value(self, data):
+        # Convert string to ObjectId for deserialization
+        return bson.ObjectId(data) if isinstance(data, str) else data
+
+
 class OTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField()
+
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=100)
     email = serializers.EmailField()
@@ -47,7 +58,7 @@ from django.contrib.auth.hashers import make_password
 from .models import User  # Adjust the import according to your app structure
 
 class UserSerializer(serializers.Serializer):
-    id = serializers.CharField(read_only=True)  # Use CharField for ObjectId
+    id = ObjectIdField(read_only=True)  # Use CharField for ObjectId
     username = serializers.CharField(max_length=100)
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
@@ -78,11 +89,10 @@ class LoginSerializer(serializers.Serializer):
         return data
 
 
-# serializers.py
-
 
 
 class HiddenGemSerializer(serializers.Serializer):
+    id = ObjectIdField(read_only=True)
     name = serializers.CharField(max_length=200)
     description = serializers.CharField(allow_blank=True)
     state = serializers.CharField(max_length=100)
@@ -102,12 +112,13 @@ class HiddenGemSerializer(serializers.Serializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
-
+## delete
 
 from rest_framework import serializers
 from .models import Guide
 
 class GuideSerializer(serializers.Serializer):
+    id = ObjectIdField(read_only=True)
     name = serializers.CharField(max_length=200)
     price = serializers.FloatField()
     available_dates = serializers.ListField(child=serializers.DateTimeField(), required=False)
@@ -120,4 +131,28 @@ class GuideSerializer(serializers.Serializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+class CustomPackageSerializer(serializers.Serializer):
+    id = ObjectIdField(read_only=True)
+    name = serializers.CharField(max_length=200)
+    places = serializers.ListField(child=serializers.PrimaryKeyRelatedField(queryset=HiddenGem.objects.all()))
+    state = serializers.CharField(max_length=100)
+    price = serializers.FloatField()
+    number_of_persons = serializers.IntegerField()
+    guide = serializers.PrimaryKeyRelatedField(queryset=Guide.objects.all(), required=False)
+
+
+class BookingHistorySerializer(serializers.Serializer):
+    gem = serializers.CharField(source='gem.id', required=False)  # Convert ObjectId to string
+    package = serializers.CharField(source='package.id', required=False)
+    guide = serializers.CharField(source='guide.id', required=False)
+    booking_date = serializers.DateTimeField()
+    price = serializers.FloatField()
+    guide_price = serializers.FloatField()
+
+    # Optional: Include more detailed information if necessary
+    gem_name = serializers.CharField(source='gem.name', required=False)
+    package_name = serializers.CharField(source='package.name', required=False)
+    guide_name = serializers.CharField(source='guide.name', required=False)
+
 

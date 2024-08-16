@@ -25,7 +25,7 @@ class Guide(me.Document):
     name = me.StringField(required=True, max_length=200)
     price = me.FloatField(required=True)
     available_dates = me.ListField(me.DateTimeField())  # Dates when the guide is available
-
+# refernce with user after  book mail it all details
     meta = {
         'collection': 'guides',
         'indexes': [
@@ -49,13 +49,12 @@ class CustomPackage(me.Document):
     }
 
 class BookingHistory(me.EmbeddedDocument):
-    package = me.ReferenceField(CustomPackage)
-    guide = me.ReferenceField(Guide, null=True)  # Optional guide reference
-    booked_at = me.DateTimeField(default=datetime.utcnow)
-    guide_price = me.FloatField(default=0.0)  # Store the guide's price
-
-
-import mongoengine as me
+    gem = me.ReferenceField(HiddenGem, null=True)
+    package = me.ReferenceField(CustomPackage, null=True)
+    guide = me.ReferenceField(Guide, null=True)
+    booking_date = me.DateTimeField(default=datetime.utcnow)
+    price = me.FloatField()
+    guide_price= me.FloatField()
 
 
 class User(me.Document):
