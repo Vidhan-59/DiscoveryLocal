@@ -8,31 +8,31 @@ class HiddenGem(me.Document):
     date = me.DateTimeField()
     photos = me.ListField(me.URLField())
     rating = me.FloatField()
-    number_of_person_views = me.IntField()
+    number_of_person_views = me.IntField(default=0)  # Default to 0
     price = me.FloatField()
     best_time = me.StringField()
     additional_info = me.StringField()
 
     meta = {
         'collection': 'hidden_gems',
-        'indexes': [
-            'state',
-            'rating',
-        ]
+        'indexes': ['state', 'rating']
     }
+
+    def increment_person_views(self, num_persons):
+        self.number_of_person_views += num_persons
+        self.save()
+
 
 class Guide(me.Document):
     name = me.StringField(required=True, max_length=200)
     price = me.FloatField(required=True)
     available_dates = me.ListField(me.DateTimeField())  # Dates when the guide is available
-# refernce with user after  book mail it all details
+
     meta = {
         'collection': 'guides',
-        'indexes': [
-            'name',
-            'price',
-        ]
+        'indexes': ['name', 'price']
     }
+
 
 class CustomPackage(me.Document):
     name = me.StringField(required=True, max_length=200)
@@ -45,8 +45,9 @@ class CustomPackage(me.Document):
     guide = me.ReferenceField(Guide, null=True)  # Optional guide reference
 
     meta = {
-        'collection': 'custom_packages',
+        'collection': 'custom_packages'
     }
+
 
 class BookingHistory(me.EmbeddedDocument):
     gem = me.ReferenceField(HiddenGem, null=True)
@@ -54,7 +55,8 @@ class BookingHistory(me.EmbeddedDocument):
     guide = me.ReferenceField(Guide, null=True)
     booking_date = me.DateTimeField(default=datetime.utcnow)
     price = me.FloatField()
-    guide_price= me.FloatField()
+    guide_price = me.FloatField()
+    number_of_persons = me.IntField(default=0)  # Field to store the number of persons booked
 
 
 class User(me.Document):
@@ -69,10 +71,7 @@ class User(me.Document):
 
     meta = {
         'collection': 'users',
-        'indexes': [
-            'username',
-            'email',
-        ]
+        'indexes': ['username', 'email']
     }
 
     def is_admin(self):
@@ -93,11 +92,12 @@ class OTP(me.Document):
 
     meta = {
         'collection': 'otps',
-        'indexes': ['email', 'otp', 'expires_at'],
+        'indexes': ['email', 'otp', 'expires_at']
     }
 
     def is_expired(self):
         return self.expires_at < datetime.utcnow()
+
 
 class Token(me.Document):
     user = me.ReferenceField(User, required=True)
@@ -106,7 +106,7 @@ class Token(me.Document):
     expires_at = me.DateTimeField(default=lambda: datetime.utcnow() + timedelta(days=7))  # Token valid for 7 days by default
 
     meta = {
-        'collection': 'tokens',
+        'collection': 'tokens'
     }
 
     def is_valid(self):

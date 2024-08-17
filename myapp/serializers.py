@@ -3,6 +3,10 @@ import bcrypt
 from rest_framework import serializers
 from .models import *
 import bson
+from rest_framework import serializers
+from .models import User
+from django.contrib.auth.hashers import make_password
+from .models import User  # Adjust the import according to your app structure
 
 class ObjectIdField(serializers.Field):
     def to_representation(self, value):
@@ -51,11 +55,7 @@ class RegisterSerializer(serializers.Serializer):
         return data
 
 
-from rest_framework import serializers
-from .models import User
 
-from django.contrib.auth.hashers import make_password
-from .models import User  # Adjust the import according to your app structure
 
 class UserSerializer(serializers.Serializer):
     id = ObjectIdField(read_only=True)  # Use CharField for ObjectId
@@ -92,18 +92,29 @@ class LoginSerializer(serializers.Serializer):
 
 
 class HiddenGemSerializer(serializers.Serializer):
-    id = ObjectIdField(read_only=True)
-    name = serializers.CharField(max_length=200)
-    description = serializers.CharField(allow_blank=True)
-    state = serializers.CharField(max_length=100)
-    date = serializers.DateTimeField(required=False)
-    photos = serializers.ListField(child=serializers.URLField(), required=False)
-    rating = serializers.FloatField(required=False)
-    number_of_person_views = serializers.IntegerField(required=False)
-    price = serializers.FloatField(required=False)
-    best_time = serializers.CharField(allow_blank=True)
-    additional_info = serializers.CharField(allow_blank=True)
+    # id = ObjectIdField(read_only=True)
+    # name = serializers.CharField(max_length=200)
+    # description = serializers.CharField(allow_blank=True)
+    # state = serializers.CharField(max_length=100)
+    # date = serializers.DateTimeField(required=False)
+    # photos = serializers.ListField(child=serializers.URLField(), required=False)
+    # rating = serializers.FloatField(required=False)
+    # number_of_person_views = serializers.IntegerField(required=False)
+    # price = serializers.FloatField(required=False)
+    # best_time = serializers.CharField(allow_blank=True)
+    # additional_info = serializers.CharField(allow_blank=True)
 
+    id = serializers.CharField(allow_blank=True , required=False)
+    name = serializers.CharField()
+    description = serializers.CharField()
+    state = serializers.CharField()
+    date = serializers.DateTimeField()
+    photos = serializers.ListField(child=serializers.URLField())
+    rating = serializers.FloatField()
+    number_of_person_views = serializers.IntegerField()
+    price = serializers.FloatField()
+    best_time = serializers.CharField()
+    additional_info = serializers.CharField()
     def create(self, validated_data):
         return HiddenGem.objects.create(**validated_data)
 
@@ -118,11 +129,14 @@ from rest_framework import serializers
 from .models import Guide
 
 class GuideSerializer(serializers.Serializer):
-    id = ObjectIdField(read_only=True)
-    name = serializers.CharField(max_length=200)
+    # id = ObjectIdField(read_only=True)
+    # name = serializers.CharField(max_length=200)
+    # price = serializers.FloatField()
+    # available_dates = serializers.ListField(child=serializers.DateTimeField(), required=False)
+    id = serializers.CharField()
+    name = serializers.CharField()
     price = serializers.FloatField()
-    available_dates = serializers.ListField(child=serializers.DateTimeField(), required=False)
-
+    available_dates = serializers.ListField(child=serializers.DateTimeField())
     def create(self, validated_data):
         return Guide.objects.create(**validated_data)
 
@@ -133,26 +147,57 @@ class GuideSerializer(serializers.Serializer):
         return instance
 
 class CustomPackageSerializer(serializers.Serializer):
-    id = ObjectIdField(read_only=True)
-    name = serializers.CharField(max_length=200)
-    places = serializers.ListField(child=serializers.PrimaryKeyRelatedField(queryset=HiddenGem.objects.all()))
-    state = serializers.CharField(max_length=100)
+    # id = ObjectIdField(read_only=True)
+    # name = serializers.CharField(max_length=200)
+    # places = serializers.ListField(child=serializers.PrimaryKeyRelatedField(queryset=HiddenGem.objects.all()))
+    # state = serializers.CharField(max_length=100)
+    # price = serializers.FloatField()
+    # number_of_persons = serializers.IntegerField()
+    # guide = serializers.PrimaryKeyRelatedField(queryset=Guide.objects.all(), required=False)
+    id = serializers.CharField()
+    name = serializers.CharField()
+    places = HiddenGemSerializer(many=True)  # Assuming places is a list of HiddenGems
+    state = serializers.CharField()
     price = serializers.FloatField()
     number_of_persons = serializers.IntegerField()
-    guide = serializers.PrimaryKeyRelatedField(queryset=Guide.objects.all(), required=False)
+    booked_at = serializers.DateTimeField()
+    guide = GuideSerializer()  # Assuming guide is optional
 
 
 class BookingHistorySerializer(serializers.Serializer):
-    gem = serializers.CharField(source='gem.id', required=False)  # Convert ObjectId to string
-    package = serializers.CharField(source='package.id', required=False)
-    guide = serializers.CharField(source='guide.id', required=False)
+    # gem = serializers.CharField(source='gem.id', required=False)  # Convert ObjectId to string
+    # package = serializers.CharField(source='package.id', required=False)
+    # guide = serializers.CharField(source='guide.id', required=False)
+    # booking_date = serializers.DateTimeField()
+    # price = serializers.FloatField()
+    # guide_price = serializers.FloatField(required=False)
+    # number_of_persons = serializers.IntegerField(required=False)  # Include the number of persons field
+    #
+    # # Additional details
+    # gem_name = serializers.CharField(source='gem.name', required=False)
+    # package_name = serializers.CharField(source='package.name', required=False)
+    # guide_name = serializers.CharField(source='guide.name', required=False)
+    # state = serializers.CharField(source='gem.state', required=False)  # Add state info from HiddenGem
+    # rating = serializers.FloatField(source='gem.rating', required=False)  # Add rating from HiddenGem
+    package = CustomPackageSerializer()  # Include detailed package info
+    gem = HiddenGemSerializer()  # Include gem details if applicable
+    guide = serializers.CharField(source='guide.name', required=False)
     booking_date = serializers.DateTimeField()
     price = serializers.FloatField()
-    guide_price = serializers.FloatField()
+    guide_price = serializers.FloatField(required=False)
+    number_of_persons = serializers.IntegerField(required=False)
 
-    # Optional: Include more detailed information if necessary
-    gem_name = serializers.CharField(source='gem.name', required=False)
-    package_name = serializers.CharField(source='package.name', required=False)
-    guide_name = serializers.CharField(source='guide.name', required=False)
+    def get_gem(self, obj):
+        if obj.gem:
+            return HiddenGemSerializer(obj.gem).data
+        return None
 
+    def get_package(self, obj):
+        if obj.package:
+            return CustomPackageSerializer(obj.package).data
+        return None
 
+    def get_guide(self, obj):
+        if obj.guide:
+            return GuideSerializer(obj.guide).data
+        return None

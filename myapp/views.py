@@ -95,13 +95,20 @@ def get_all_users(request):
 
     # Retrieve the token document from the MongoDB database using mongoengine
     token = Token.objects(key=token_key).first()
+
+    if token is None or token.user is None:
+        return JsonResponse({'error': 'Invalid or expired token.'}, status=401)
+
     username = token.user.username
-    print(username)
-    if username == 'admin':
+
+    # Check if the user has admin privileges
+    if username == 'dungeon':
         users = User.objects.all()
         serializer = UserSerializer(users, many=True)
         return JsonResponse(serializer.data, safe=False, status=200)
+
     return JsonResponse({"error": "Only admin can access"}, status=401)
+
 
 class RegisterUserView(APIView):
     permission_classes = [AllowAny]
@@ -247,7 +254,7 @@ class GuideListCreateAPIView(APIView):
 
 
 class GuideDetailAPIView(APIView):
-    permission_classes = [IsAdminUser]  # Only admin users can access this view
+    permission_classes = [AllowAny]  # Only admin users can access this view
 
     def get_object(self, pk):
         try:
@@ -371,21 +378,25 @@ class BookHiddenGem(APIView):
     def post(self, request):
         user = request.user
         gem_id = request.data.get('gem_id')
+        number_of_persons = request.data.get('number_of_persons')  # Default to 1 person if not provided
 
         try:
-
             gem = HiddenGem.objects.get(id=gem_id)
-
-
+            number_of_persons = int(number_of_persons)
+            # Create a new booking history entry
             booking_history_entry = BookingHistory(
                 gem=gem,
                 booking_date=datetime.utcnow(),
-                price=gem.price
+                price=gem.price * number_of_persons,  # Calculate price based on the number of persons
+                number_of_persons=number_of_persons
             )
 
-
+            # Add the booking history entry to the user's booking history
             user.booking_history.append(booking_history_entry)
             user.save()
+
+            # Update the number of person views in the HiddenGem
+            gem.increment_person_views(number_of_persons)
 
             return Response({"message": "HiddenGem booked successfully!"}, status=status.HTTP_201_CREATED)
 
@@ -396,18 +407,19 @@ class BookHiddenGem(APIView):
 
 class BookingHistoryView(APIView):
     permission_classes = [IsAuthenticatedUser]
+
     def get(self, request):
         user = request.user
-
-
         booking_history = user.booking_history
 
         if not booking_history:
             return Response({"message": "No booking history found."}, status=status.HTTP_404_NOT_FOUND)
 
-
+        # Serialize the booking history
         serializer = BookingHistorySerializer(booking_history, many=True)
+
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class BookCustomPackage(APIView):
     permission_classes = [IsAuthenticatedUser]
@@ -417,22 +429,31 @@ class BookCustomPackage(APIView):
         package_id = request.data.get('package_id')
 
         try:
-
+            # Fetch the package
             package = CustomPackage.objects.get(id=package_id)
 
-
+            # Optionally fetch the guide if provided
             guide = Guide.objects.get(id=request.data.get('guide_id')) if request.data.get('guide_id') else None
 
-            # Create a booking history entry
+            # Get the number of persons from the package
+            number_of_persons = package.number_of_persons
+
+            # Create a booking history entry for the package
             booking_history_entry = BookingHistory(
                 package=package,
                 guide=guide,
                 booking_date=datetime.utcnow(),
-                price=package.price,
-                guide_price=guide.price if guide else 0
+                price=package.price * number_of_persons,  # Calculate total price based on number of persons
+                guide_price=(guide.price * number_of_persons) if guide else 0,
+                number_of_persons=number_of_persons  # Store the number of persons in booking history
             )
 
+            # Update the number of person views in each associated HiddenGem
+            for gem in package.places:
+                gem.number_of_person_views += number_of_persons
+                gem.save()
 
+            # Append the booking entry to the user's booking history
             user.booking_history.append(booking_history_entry)
             user.save()
 
