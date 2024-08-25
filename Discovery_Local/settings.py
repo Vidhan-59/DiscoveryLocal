@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     'myapp',
     'rest_framework',
     'rest_framework.authtoken',
+    'cloudinary_storage',
+    'cloudinary',
 ]
 
 MIDDLEWARE = [
@@ -154,4 +156,13 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'dungeon0559@gmail.com'
 EMAIL_HOST_PASSWORD = 'cqgy kfox lole ujcw'
-
+# import cloudinary
+# import cloudinary.uploader
+# import cloudinary.api
+# cloudinary settings
+# CLOUDINARY_STORAGE = {
+#     'CLOUD_NAME': 'dbxm4lvn7',
+#     'API_KEY': '737174276338511',
+#     'API_SECRET': 'xRcCG0Ak2x0m2gmnfkm9fBqMnF0'
+# }
+# DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'

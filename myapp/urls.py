@@ -19,7 +19,18 @@ urlpatterns = [
     # custompackage API's
     path('custom-package/',views.CreateCustomPackage.as_view()),
     # Booking API's
-    path('booking-history/',views.BookingHistoryView.as_view()),
+    path('booking-history/',views.BookingHistoryListCreateView.as_view()),
     path('bookhiddengem/',views.BookHiddenGem.as_view()),
     path('bookcustompackage/' , views.BookCustomPackage.as_view()),
+    # Review and rating API's'
+    path('reviews/', views.ReviewListAPIView.as_view(), name='review-list'),
+    path('reviews/create/', views.ReviewCreateAPIView.as_view(), name='review-create'),
+
+#     driver API's
+    path('drivers/', views.DriverListCreateView.as_view(), name='driver-list-create'),
+    path('drivers/<str:pk>/', views.DriverRetrieveUpdateDestroyView.as_view(), name='driver-detail'),
+
+#     cab API's
+    path('cabs/', views.CabListCreateView.as_view(), name='cab-list-create'),
+    path('cabs/<str:pk>/', views.CabDetailView.as_view(), name='cab-detail'),
 ]

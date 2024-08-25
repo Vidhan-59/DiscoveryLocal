@@ -49,14 +49,15 @@ class CustomPackage(me.Document):
     }
 
 
-class BookingHistory(me.EmbeddedDocument):
-    gem = me.ReferenceField(HiddenGem, null=True)
-    package = me.ReferenceField(CustomPackage, null=True)
-    guide = me.ReferenceField(Guide, null=True)
-    booking_date = me.DateTimeField(default=datetime.utcnow)
-    price = me.FloatField()
-    guide_price = me.FloatField()
-    number_of_persons = me.IntField(default=0)  # Field to store the number of persons booked
+# class BookingHistory(me.EmbeddedDocument):
+#     gem = me.ReferenceField(HiddenGem, null=True)
+#     package = me.ReferenceField(CustomPackage, null=True)
+#     guide = me.ReferenceField(Guide, null=True)
+#     booking_date = me.DateTimeField(default=datetime.utcnow)
+#     price = me.FloatField()
+#     guide_price = me.FloatField()
+#     number_of_persons = me.IntField(default=0)  # Field to store the number of persons booked
+
 
 
 class User(me.Document):
@@ -67,8 +68,8 @@ class User(me.Document):
     contact_number = me.StringField(required=True, max_length=15)
     state = me.StringField(required=True, max_length=100)
     role = me.StringField(required=True, choices=ROLE_CHOICES, default='USER')  # Default role is 'normal_user'
-    booking_history = me.EmbeddedDocumentListField('BookingHistory')
-
+    profile_picture = me.URLField(null=True ,required=False)
+    # booking_history = me.EmbeddedDocumentListField('BookingHistory')
     meta = {
         'collection': 'users',
         'indexes': ['username', 'email']
@@ -111,3 +112,62 @@ class Token(me.Document):
 
     def is_valid(self):
         return self.expires_at > datetime.utcnow() if self.expires_at else True
+
+class Review(me.Document):
+    user = me.ReferenceField('User', required=True)
+    place = me.ReferenceField(HiddenGem, required=True)
+    comment = me.StringField(required=True, max_length=1000)
+    rating = me.FloatField(min_value=0, max_value=5)
+    created_at = me.DateTimeField(default=datetime.utcnow)
+
+    meta = {
+        'collection': 'reviews',
+        'indexes': ['user', 'place', 'rating']
+    }
+
+    @classmethod
+    def can_review(cls, user, place):
+        """Check if the user can review the given place."""
+        return any(
+            history.gem == place for history in user.booking_history
+        )
+################################################################################################
+class Driver(me.Document):
+    username = me.StringField(required=True, max_length=200)
+    contact_number = me.StringField(required=True, max_length=15)
+    state = me.StringField(required=True, max_length=100)
+    available = me.BooleanField(default=True)
+    password = me.StringField(required=True, max_length=10)
+    role = me.StringField(default="DRIVER", required=False)
+    cabs = me.ListField(me.ReferenceField('Cab'), default=list)  # List of associated cabs
+
+    meta = {
+        'collection': 'drivers',
+        'indexes': ['state', 'available']
+    }
+
+class Cab(me.Document):
+    driver = me.ReferenceField(Driver, required=True)
+    car_name = me.StringField(required=True, max_length=200)
+    number_plate = me.StringField(required=True, max_length=20)
+    number_of_persons = me.IntField(required=True)
+    price = me.FloatField(required=True)
+    available = me.BooleanField(default=True)
+    state = me.StringField(required=True, max_length=100)
+
+    meta = {
+        'collection': 'cabs',
+        'indexes': ['available']
+    }
+
+
+
+class BookingHistory(me.Document):
+    user = me.ReferenceField(User, null=True)
+    gem = me.ReferenceField(HiddenGem, null=True)
+    package = me.ReferenceField(CustomPackage, null=True)
+    guide = me.ReferenceField(Guide, null=True)
+    booking_date = me.DateTimeField(default=datetime.utcnow)
+    price = me.FloatField()
+    number_of_persons = me.IntField(default=0)  # Field to store the number of persons booked
+    cab=me.ReferenceField(Cab,null=True)

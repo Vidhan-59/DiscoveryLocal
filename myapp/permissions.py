@@ -60,3 +60,6 @@ class IsAuthenticatedUser(BasePermission):
         request.user = token.user
         # If the token is valid and not expired, grant access
         return True
+# class IsDriverOnly(BasePermission):
+#     def has_permission(self, request, view):
+#

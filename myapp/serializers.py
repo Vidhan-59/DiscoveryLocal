@@ -65,13 +65,14 @@ class UserSerializer(serializers.Serializer):
     contact_number = serializers.CharField(max_length=15)
     state = serializers.CharField(max_length=100)
     role = serializers.ChoiceField(choices=['ADMIN', 'GUIDE', 'USER'])
-    booking_history = serializers.ListField(child=serializers.DictField(), required=False)
+    profile_picture= serializers.URLField(read_only=True , required=False)
+    # booking_history = serializers.ListField(child=serializers.DictField(), required=False)
 
 
 class LoginSerializer(serializers.Serializer):
+    print('123')
     username = serializers.CharField()
     password = serializers.CharField()
-
     def validate(self, data):
         username = data.get('username')
         password = data.get('password')
@@ -79,6 +80,7 @@ class LoginSerializer(serializers.Serializer):
         # Authenticate user
         try:
             user = User.objects.get(username=username)
+            print(user.username)
         except :
             raise serializers.ValidationError("Invalid username or password.")
 
@@ -92,18 +94,6 @@ class LoginSerializer(serializers.Serializer):
 
 
 class HiddenGemSerializer(serializers.Serializer):
-    # id = ObjectIdField(read_only=True)
-    # name = serializers.CharField(max_length=200)
-    # description = serializers.CharField(allow_blank=True)
-    # state = serializers.CharField(max_length=100)
-    # date = serializers.DateTimeField(required=False)
-    # photos = serializers.ListField(child=serializers.URLField(), required=False)
-    # rating = serializers.FloatField(required=False)
-    # number_of_person_views = serializers.IntegerField(required=False)
-    # price = serializers.FloatField(required=False)
-    # best_time = serializers.CharField(allow_blank=True)
-    # additional_info = serializers.CharField(allow_blank=True)
-
     id = serializers.CharField(allow_blank=True , required=False)
     name = serializers.CharField()
     description = serializers.CharField()
@@ -129,10 +119,6 @@ from rest_framework import serializers
 from .models import Guide
 
 class GuideSerializer(serializers.Serializer):
-    # id = ObjectIdField(read_only=True)
-    # name = serializers.CharField(max_length=200)
-    # price = serializers.FloatField()
-    # available_dates = serializers.ListField(child=serializers.DateTimeField(), required=False)
     id = serializers.CharField()
     name = serializers.CharField()
     price = serializers.FloatField()
@@ -147,13 +133,6 @@ class GuideSerializer(serializers.Serializer):
         return instance
 
 class CustomPackageSerializer(serializers.Serializer):
-    # id = ObjectIdField(read_only=True)
-    # name = serializers.CharField(max_length=200)
-    # places = serializers.ListField(child=serializers.PrimaryKeyRelatedField(queryset=HiddenGem.objects.all()))
-    # state = serializers.CharField(max_length=100)
-    # price = serializers.FloatField()
-    # number_of_persons = serializers.IntegerField()
-    # guide = serializers.PrimaryKeyRelatedField(queryset=Guide.objects.all(), required=False)
     id = serializers.CharField()
     name = serializers.CharField()
     places = HiddenGemSerializer(many=True)  # Assuming places is a list of HiddenGems
@@ -165,20 +144,7 @@ class CustomPackageSerializer(serializers.Serializer):
 
 
 class BookingHistorySerializer(serializers.Serializer):
-    # gem = serializers.CharField(source='gem.id', required=False)  # Convert ObjectId to string
-    # package = serializers.CharField(source='package.id', required=False)
-    # guide = serializers.CharField(source='guide.id', required=False)
-    # booking_date = serializers.DateTimeField()
-    # price = serializers.FloatField()
-    # guide_price = serializers.FloatField(required=False)
-    # number_of_persons = serializers.IntegerField(required=False)  # Include the number of persons field
-    #
-    # # Additional details
-    # gem_name = serializers.CharField(source='gem.name', required=False)
-    # package_name = serializers.CharField(source='package.name', required=False)
-    # guide_name = serializers.CharField(source='guide.name', required=False)
-    # state = serializers.CharField(source='gem.state', required=False)  # Add state info from HiddenGem
-    # rating = serializers.FloatField(source='gem.rating', required=False)  # Add rating from HiddenGem
+
     package = CustomPackageSerializer()  # Include detailed package info
     gem = HiddenGemSerializer()  # Include gem details if applicable
     guide = serializers.CharField(source='guide.name', required=False)
@@ -201,3 +167,122 @@ class BookingHistorySerializer(serializers.Serializer):
         if obj.guide:
             return GuideSerializer(obj.guide).data
         return None
+
+
+
+class ReviewSerializer(serializers.Serializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)  # Removed queryset
+    place = serializers.PrimaryKeyRelatedField(queryset=HiddenGem.objects.all())
+    comment = serializers.CharField(max_length=1000)
+    rating = serializers.FloatField(min_value=0, max_value=5)
+    created_at = serializers.DateTimeField(read_only=True)
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        place = validated_data['place']
+
+        # Check if the user can review the place
+        if not Review.can_review(user, place):
+            raise serializers.ValidationError("User has not booked this place and cannot leave a review.")
+
+        review = Review(
+            user=user,
+            place=place,
+            comment=validated_data['comment'],
+            rating=validated_data['rating']
+        )
+        review.save()
+        return review
+
+
+class DriverSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
+    username = serializers.CharField(max_length=200)
+    contact_number = serializers.CharField(max_length=15)
+    state = serializers.CharField(max_length=100)
+    available = serializers.BooleanField(default=True)
+    password = serializers.CharField(max_length=10)
+    role = serializers.CharField(default="DRIVER")
+    cabs = serializers.ListField(child=serializers.CharField(), required=False)
+
+    def create(self, validated_data):
+        return Driver.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+from bson import ObjectId
+class CabSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
+    driver = serializers.CharField()
+    car_name = serializers.CharField(max_length=200)
+    number_plate = serializers.CharField(max_length=20)
+    number_of_persons = serializers.IntegerField()
+    price = serializers.FloatField()
+    available = serializers.BooleanField(default=True)
+    state = serializers.CharField(max_length=100 ,required=False)
+
+    def create(self, validated_data):
+        return Cab.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+
+class BookingHistorySerializer(serializers.Serializer):
+    user = UserSerializer()
+    gem = HiddenGemSerializer()
+    package = CustomPackageSerializer()
+    guide = GuideSerializer()
+    booking_date = serializers.DateTimeField()
+    price = serializers.FloatField()
+    number_of_persons = serializers.IntegerField()
+    cab = CabSerializer()
+
+    def create(self, validated_data):
+        user_data = validated_data.pop('user', None)
+        gem_data = validated_data.pop('gem', None)
+        package_data = validated_data.pop('package', None)
+        guide_data = validated_data.pop('guide', None)
+        cab_data = validated_data.pop('cab', None)
+
+        user = User.objects.get(id=user_data['id']) if user_data else None
+        gem = HiddenGem.objects.get(id=gem_data['id']) if gem_data else None
+        package = CustomPackage.objects.get(id=package_data['id']) if package_data else None
+        guide = Guide.objects.get(id=guide_data['id']) if guide_data else None
+        cab = Cab.objects.get(id=cab_data['id']) if cab_data else None
+
+        booking = BookingHistory(
+            user=user,
+            gem=gem,
+            package=package,
+            guide=guide,
+            cab=cab,
+            **validated_data
+        )
+        booking.save()
+        return booking
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', None)
+        gem_data = validated_data.pop('gem', None)
+        package_data = validated_data.pop('package', None)
+        guide_data = validated_data.pop('guide', None)
+        cab_data = validated_data.pop('cab', None)
+
+        instance.user = User.objects.get(id=user_data['id']) if user_data else instance.user
+        instance.gem = HiddenGem.objects.get(id=gem_data['id']) if gem_data else instance.gem
+        instance.package = CustomPackage.objects.get(id=package_data['id']) if package_data else instance.package
+        instance.guide = Guide.objects.get(id=guide_data['id']) if guide_data else instance.guide
+        instance.cab = Cab.objects.get(id=cab_data['id']) if cab_data else instance.cab
+
+        instance.booking_date = validated_data.get('booking_date', instance.booking_date)
+        instance.price = validated_data.get('price', instance.price)
+        instance.number_of_persons = validated_data.get('number_of_persons', instance.number_of_persons)
+        instance.save()
+        return instance
