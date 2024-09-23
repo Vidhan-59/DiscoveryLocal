@@ -1,21 +1,27 @@
 import mongoengine as me
 from datetime import datetime, timedelta
 
+
 class HiddenGem(me.Document):
-    name = me.StringField(required=True, max_length=200)
+    CATEGORY_CHOICES = ('ADVENTURE', 'BEACH', 'MOUNTAIN', 'HISTORICAL', 'URBAN', 'WILDLIFE')
+
+    name = me.StringField(required=True, max_length=200 , unique=True)
     description = me.StringField()
     state = me.StringField(required=True, max_length=100)
-    date = me.DateTimeField()
     photos = me.ListField(me.URLField())
     rating = me.FloatField()
     number_of_person_views = me.IntField(default=0)  # Default to 0
     price = me.FloatField()
     best_time = me.StringField()
     additional_info = me.StringField()
+    category = me.StringField(required=True, choices=CATEGORY_CHOICES)  # Enum for category
+
+    def is_available(self, date):
+        return date in self.available_dates
 
     meta = {
         'collection': 'hidden_gems',
-        'indexes': ['state', 'rating']
+        'indexes': ['state', 'rating', 'category']
     }
 
     def increment_person_views(self, num_persons):
@@ -26,7 +32,11 @@ class HiddenGem(me.Document):
 class Guide(me.Document):
     name = me.StringField(required=True, max_length=200)
     price = me.FloatField(required=True)
-    available_dates = me.ListField(me.DateTimeField())  # Dates when the guide is available
+    available_dates = me.ListField(me.DateTimeField())
+
+    rating = me.FloatField()
+    state = me.ReferenceField(HiddenGem)
+    image = me.ListField(me.URLField() , required=False)
 
     meta = {
         'collection': 'guides',
@@ -35,7 +45,7 @@ class Guide(me.Document):
 
 
 class CustomPackage(me.Document):
-    name = me.StringField(required=True, max_length=200)
+    name = me.StringField(required=True, max_length=200 , unique=True)
     places = me.ListField(me.ReferenceField(HiddenGem))
     state = me.StringField(required=True, max_length=100)
     price = me.FloatField()
@@ -43,21 +53,9 @@ class CustomPackage(me.Document):
     user = me.ReferenceField('User')
     booked_at = me.DateTimeField(default=datetime.utcnow)
     guide = me.ReferenceField(Guide, null=True)  # Optional guide reference
-
     meta = {
         'collection': 'custom_packages'
     }
-
-
-# class BookingHistory(me.EmbeddedDocument):
-#     gem = me.ReferenceField(HiddenGem, null=True)
-#     package = me.ReferenceField(CustomPackage, null=True)
-#     guide = me.ReferenceField(Guide, null=True)
-#     booking_date = me.DateTimeField(default=datetime.utcnow)
-#     price = me.FloatField()
-#     guide_price = me.FloatField()
-#     number_of_persons = me.IntField(default=0)  # Field to store the number of persons booked
-
 
 
 class User(me.Document):
@@ -113,11 +111,31 @@ class Token(me.Document):
     def is_valid(self):
         return self.expires_at > datetime.utcnow() if self.expires_at else True
 
+# class Review(me.Document):
+#     user = me.ReferenceField('User', required=True)
+#     place = me.ReferenceField(HiddenGem, required=True)
+#     comment = me.StringField(required=True, max_length=1000)
+#     rating = me.FloatField(min_value=0, max_value=5)
+#     created_at = me.DateTimeField(default=datetime.utcnow)
+#
+#     meta = {
+#         'collection': 'reviews',
+#         'indexes': ['user', 'place', 'rating']
+#     }
+#
+#     @classmethod
+#     def can_review(cls, user, place):
+#         """Check if the user can review the given place."""
+#         return any(
+#             history.gem == place for history in user.booking_history
+#         )
+
 class Review(me.Document):
     user = me.ReferenceField('User', required=True)
     place = me.ReferenceField(HiddenGem, required=True)
     comment = me.StringField(required=True, max_length=1000)
     rating = me.FloatField(min_value=0, max_value=5)
+    images = me.ListField(me.URLField(), required=False)  # Field to add images
     created_at = me.DateTimeField(default=datetime.utcnow)
 
     meta = {
@@ -131,6 +149,8 @@ class Review(me.Document):
         return any(
             history.gem == place for history in user.booking_history
         )
+
+
 ################################################################################################
 class Driver(me.Document):
     username = me.StringField(required=True, max_length=200)
@@ -162,12 +182,65 @@ class Cab(me.Document):
 
 
 
+# class BookingHistory(me.Document):
+#     user = me.ReferenceField(User, null=True)
+#     gem = me.ReferenceField(HiddenGem, null=True)
+#     package = me.ReferenceField(CustomPackage, null=True)
+#     guide = me.ReferenceField(Guide, null=True)
+#     booking_date = me.DateTimeField(default=datetime.utcnow)
+#     price = me.FloatField()
+#     number_of_persons = me.IntField(default=0)  # Field to store the number of persons booked
+#     cab=me.ReferenceField(Cab,null=True)
+
+
+class Transaction(me.Document):
+    STATUS_CHOICES = ('SUCCESS', 'FAILED', 'PENDING')
+
+    user = me.ReferenceField('User', required=True)
+    booking_date = me.DateTimeField(default=datetime.utcnow)
+    hidden_gem = me.ReferenceField('HiddenGem', null=True)  # Either hidden gem or package will be referenced
+    package = me.ReferenceField('CustomPackage', null=True)
+    amount = me.FloatField(required=True)
+    status = me.StringField(choices=STATUS_CHOICES, default='PENDING')
+    transaction_success = me.BooleanField()  # Field for true/false from frontend
+    created_at = me.DateTimeField(default=datetime.utcnow)
+
+    meta = {
+        'collection': 'transactions',
+        'indexes': ['user', 'status', 'created_at']
+    }
+
+    def update_status(self):
+        """Update transaction status based on the boolean value from frontend."""
+        if self.transaction_success:
+            self.status = 'SUCCESS'
+        else:
+            self.status = 'FAILED'
+        self.save()
+
+
 class BookingHistory(me.Document):
     user = me.ReferenceField(User, null=True)
     gem = me.ReferenceField(HiddenGem, null=True)
     package = me.ReferenceField(CustomPackage, null=True)
     guide = me.ReferenceField(Guide, null=True)
+    cab = me.ReferenceField(Cab, null=True)
     booking_date = me.DateTimeField(default=datetime.utcnow)
     price = me.FloatField()
     number_of_persons = me.IntField(default=0)  # Field to store the number of persons booked
-    cab=me.ReferenceField(Cab,null=True)
+    transaction = me.ReferenceField('Transaction', null=True)  # Reference to the transaction record
+    status = me.StringField(choices=('BOOKED', 'CANCELLED' , 'PENDING'), default='PENDING')
+    package = me.ReferenceField(CustomPackage, null=True, required=False)
+    travel_date = me.DateTimeField(required=True)  # Add travel date field
+    meta = {
+        'collection': 'booking_history',
+        'indexes': ['user', 'gem', 'package', 'status']
+    }
+
+    def cancel_booking(self):
+        """Allow the user to cancel the booking only if within 10 days of the booking date."""
+        if (datetime.utcnow() - self.booking_date).days <= 10:
+            self.status = 'CANCELLED'
+            self.save()
+        else:
+            raise ValueError("Cannot cancel booking after 10 days.")

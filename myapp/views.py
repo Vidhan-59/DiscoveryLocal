@@ -1,9 +1,9 @@
 
 from django.http import HttpResponse
-from .serializers import RegisterSerializer, LoginSerializer, DriverSerializer, CabSerializer
+from .serializers import RegisterSerializer, LoginSerializer, DriverSerializer, CabSerializer, TransactionSerializer
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-from .models import User, Token, Review, Driver, Cab
+from .models import User, Token, Review, Driver, Cab, Transaction
 import uuid
 import bcrypt
 from .models import HiddenGem
@@ -168,20 +168,28 @@ class VerifyOTPAndRegisterView(APIView):
 
 # hidden gemss
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAdminUser
+from .models import HiddenGem
+from .serializers import HiddenGemSerializer
+
+
 class HiddenGemList(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
         gems = HiddenGem.objects.all()
         serializer = HiddenGemSerializer(gems, many=True)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = HiddenGemSerializer(data=request.data)
         if serializer.is_valid():
             gem = serializer.save()
             return Response(HiddenGemSerializer(gem).data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class HiddenGemDetail(APIView):
@@ -190,34 +198,39 @@ class HiddenGemDetail(APIView):
     def get_object(self, pk):
         try:
             return HiddenGem.objects.get(id=pk)
-        except:
+        except HiddenGem.DoesNotExist:
             return None
 
     def get(self, request, pk):
         gem = self.get_object(pk)
         if gem is None:
-            return Response({"error": "Package not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Hidden gem not found"}, status=status.HTTP_404_NOT_FOUND)
         serializer = HiddenGemSerializer(gem)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request, pk):
         self.permission_classes = [IsAdminUser]
         self.check_permissions(request)
+
         gem = self.get_object(pk)
         if gem is None:
-            return Response({"error": "Package not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Hidden gem not found"}, status=status.HTTP_404_NOT_FOUND)
+
         serializer = HiddenGemSerializer(gem, data=request.data, partial=True)
         if serializer.is_valid():
             gem = serializer.save()
-            return Response(HiddenGemSerializer(gem).data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(HiddenGemSerializer(gem).data, status=status.HTTP_200_OK)
+
+        return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
         self.permission_classes = [IsAdminUser]
         self.check_permissions(request)
+
         gem = self.get_object(pk)
         if gem is None:
-            return Response({"error": "Package not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Hidden gem not found"}, status=status.HTTP_404_NOT_FOUND)
+
         gem.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -315,7 +328,7 @@ class CreateCustomPackage(APIView):
 
         # Get data from the request
         place_ids = request.data.get('places', [])
-        guide_id = request.data.get('guide')
+        guide_id = request.data.get('guide' , None)
         number_of_persons = request.data.get('number_of_persons')  # Default to 1 if not provided
 
         # Ensure place_ids is a list of strings
@@ -360,7 +373,12 @@ class CreateCustomPackage(APIView):
 
 
             serialized_package = serialize_custom_package(custom_package)
-            return Response(serialized_package, status=status.HTTP_201_CREATED)
+            response_data = {
+                "package": serialized_package,
+                "package_id": serialized_package["id"]  # Use the ID from the serialized package
+            }
+
+            return Response(response_data, status=status.HTTP_201_CREATED)
 
         except Guide.DoesNotExist:
             return Response({"error": "Guide not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -371,7 +389,6 @@ class CreateCustomPackage(APIView):
 from django.utils.timezone import now
 from mongoengine import DoesNotExist
 
-# Booking API's
 class BookHiddenGem(APIView):
     permission_classes = [IsAuthenticatedUser]
 
@@ -379,8 +396,15 @@ class BookHiddenGem(APIView):
         user = request.user
         gem_id = request.data.get('gem_id')
         number_of_persons = int(request.data.get('number_of_persons', 1))  # Default to 1 if not provided
+        travel_date_str = request.data.get('travel_date')  # Get the travel date from the request
+
+        if not travel_date_str:
+            return Response({"error": "Travel date is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            # Parse the travel date string to a datetime object
+            travel_date = datetime.strptime(travel_date_str, '%Y-%m-%d')
+
             gem = HiddenGem.objects.get(id=gem_id)
 
             # Create a new booking history entry
@@ -388,6 +412,7 @@ class BookHiddenGem(APIView):
                 user=user,
                 gem=gem,
                 booking_date=now(),
+                travel_date=travel_date,  # Store the travel date
                 price=gem.price * number_of_persons,
                 number_of_persons=number_of_persons
             )
@@ -408,6 +433,7 @@ class BookHiddenGem(APIView):
 
             response_data = {
                 "message": "HiddenGem booked successfully!",
+                "booking_id": str(booking_history_entry.id),
                 "cab_details": cab_details,
                 "driver_details": driver_details
             }
@@ -416,6 +442,8 @@ class BookHiddenGem(APIView):
 
         except HiddenGem.DoesNotExist:
             return Response({"error": "HiddenGem not found."}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError:
+            return Response({"error": "Invalid travel date format. Please use 'YYYY-MM-DD'."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -428,8 +456,9 @@ class BookCustomPackage(APIView):
 
         # Get data from the request
         package_id = request.data.get('package_id')
-        number_of_persons = int(request.data.get('number_of_persons', 1))  # Default to 1 person if not provided
-
+        pg = CustomPackage.objects.get(id=package_id)
+        number_of_persons = int(pg.number_of_persons)  # Default to 1 person if not provided
+        print(number_of_persons)
         try:
             # Retrieve the CustomPackage by ID
             custom_package = CustomPackage.objects.get(id=package_id)
@@ -464,6 +493,7 @@ class BookCustomPackage(APIView):
 
             response_data = {
                 "message": "Custom package booked successfully!",
+                "booking_id" : str(booking_history_entry.id),
                 "package_details": serialize_custom_package(custom_package),
                 "cab_details": cab_details,
                 "driver_details": driver_details
@@ -691,12 +721,12 @@ class BookingHistoryListCreateView(APIView):
             # Retrieve all booking history entries for the specified user
             bookings = BookingHistory.objects.filter(user=user_id)
 
-            # Fetch additional details for each booking
+            # Prepare booking details
             booking_details = []
             for booking in bookings:
                 booking_data = {
                     "booking_id": str(booking.id),
-                    "booking_date": booking.booking_date,
+                    "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
                     "price": booking.price,
                     "number_of_persons": booking.number_of_persons,
                     "gem": None,
@@ -747,5 +777,165 @@ class BookingHistoryListCreateView(APIView):
 
             return Response(booking_details, status=status.HTTP_200_OK)
 
+        except HiddenGem.DoesNotExist:
+            return Response({"error": "One or more gems not found."}, status=status.HTTP_404_NOT_FOUND)
+        except CustomPackage.DoesNotExist:
+            return Response({"error": "One or more packages not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Cab.DoesNotExist:
+            return Response({"error": "One or more cabs not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+###################################################################
+class BookCabView(APIView):
+    permission_classes = [IsAuthenticatedUser]
+
+    def post(self, request):
+        user = request.user
+        print(user.id)
+        cab_id = request.data.get('cab_id')
+
+        try:
+            # Retrieve the Cab by ID
+            cab = Cab.objects.get(id=cab_id)
+
+            # Check if there's an existing booking history for this user
+            booking_history_entry = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+
+            if not booking_history_entry:
+                return Response({"error": "No existing booking history found for the user."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update the booking history with the selected cab
+            booking_history_entry.cab = cab
+            booking_history_entry.save()
+
+            response_data = {
+                "message": "Cab added to booking history successfully!",
+                "booking_history": {
+                    "user": str(user.id),
+                    "package": str(booking_history_entry.package.id) if booking_history_entry.package else None,
+                    "gem": str(booking_history_entry.gem.id) if booking_history_entry.gem else None,
+                    "guide": str(booking_history_entry.guide.id) if booking_history_entry.guide else None,
+                    "cab": str(booking_history_entry.cab.id) if booking_history_entry.cab else None,
+                    "booking_date": booking_history_entry.booking_date,
+                    "price": booking_history_entry.price,
+                    "number_of_persons": booking_history_entry.number_of_persons
+                }
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Cab.DoesNotExist:
+            return Response({"error": "Cab not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+####################################################333
+class UserBookingHistory(APIView):
+    permission_classes = [IsAuthenticatedUser]
+
+    def get(self, request):
+        user = request.user
+        bookings = BookingHistory.objects.filter(user=user).order_by('-booking_date')
+        booking_details = [self.serialize_booking(b) for b in bookings]
+        return Response(booking_details, status=status.HTTP_200_OK)
+
+    def serialize_booking(self, booking):
+        return {
+            "gem": str(booking.gem.id) if booking.gem else None,
+            "package": str(booking.package.id) if booking.package else None,
+            "guide": str(booking.guide.id) if booking.guide else None,
+            "cab": str(booking.cab.id) if booking.cab else None,
+            "booking_date": booking.booking_date,
+            "price": booking.price,
+            "number_of_persons": booking.number_of_persons
+        }
+
+
+class TransactionView(APIView):
+    permission_classes = [IsAuthenticatedUser]
+    def post(self, request):
+        serializer = TransactionSerializer(data=request.data)
+        if serializer.is_valid():
+            booking_id = serializer.validated_data.get('booking_id')
+            transaction_success = serializer.validated_data.get('transaction_success')
+            amount = BookingHistory.objects.get(id=booking_id).price
+
+            try:
+                # Retrieve the booking history entry based on the booking_id
+                booking_history_entry = BookingHistory.objects.get(id=booking_id)
+
+                # Create a new transaction record
+                transaction = Transaction(
+                    user=booking_history_entry.user,
+                    hidden_gem=booking_history_entry.gem,
+                    package=booking_history_entry.package,
+                    amount=amount,
+                    transaction_success=transaction_success
+                )
+
+                # Update the transaction status based on the transaction_success flag
+                transaction.update_status()
+
+                # Save transaction reference in booking history
+                booking_history_entry.transaction = transaction
+                booking_history_entry.status= 'BOOKED'
+                booking_history_entry.save()
+
+                # Return success response
+                return Response({
+                    "message": "Transaction updated successfully",
+                    "transaction_id": str(transaction.id)
+                }, status=status.HTTP_200_OK)
+
+            except DoesNotExist:
+                return Response({
+                    "error": "Booking with the given ID does not exist."
+                }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+from django.utils import timezone
+
+class CancelBooking(APIView):
+    permission_classes = [IsAuthenticatedUser]
+
+    def post(self, request):
+        user = request.user
+        booking_id = request.data.get('booking_id')
+
+        try:
+            # Retrieve the booking
+            booking = BookingHistory.objects.get(id=booking_id, user=user)
+
+            # Use timezone-aware current time
+            current_time = timezone.now()
+
+            # Ensure that travel_date is timezone-aware
+            if timezone.is_naive(booking.travel_date):
+                booking.travel_date = timezone.make_aware(booking.travel_date, timezone.get_current_timezone())
+
+            # Calculate the difference in days
+            days_until_travel = (booking.travel_date - current_time).days
+            print(f"Days until travel: {days_until_travel}")
+
+            # Check if the booking can be canceled before 10 days of the travel date
+            if days_until_travel < 10:
+                return Response({"error": "Cannot cancel booking before 10 days of travel."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Cannot cancel booking before 10 days of travel."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Mark the booking as canceled
+            booking.status = 'CANCELLED'
+            booking.save()
+
+            return Response({
+                "message": "Booking canceled successfully.",
+                "booking_id": str(booking.id),
+                "status": booking.status
+            }, status=status.HTTP_200_OK)
+
+        except BookingHistory.DoesNotExist:
+            return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

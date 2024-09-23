@@ -3,7 +3,6 @@ import bcrypt
 from rest_framework import serializers
 from .models import *
 import bson
-from rest_framework import serializers
 from .models import User
 from django.contrib.auth.hashers import make_password
 from .models import User  # Adjust the import according to your app structure
@@ -92,28 +91,33 @@ class LoginSerializer(serializers.Serializer):
 
 
 
+from rest_framework import serializers
+from .models import HiddenGem
 
 class HiddenGemSerializer(serializers.Serializer):
-    id = serializers.CharField(allow_blank=True , required=False)
-    name = serializers.CharField()
-    description = serializers.CharField()
-    state = serializers.CharField()
-    date = serializers.DateTimeField()
-    photos = serializers.ListField(child=serializers.URLField())
-    rating = serializers.FloatField()
-    number_of_person_views = serializers.IntegerField()
-    price = serializers.FloatField()
-    best_time = serializers.CharField()
-    additional_info = serializers.CharField()
+    id = serializers.CharField(read_only=True)  # ObjectId will be handled automatically by MongoDB
+    name = serializers.CharField(max_length=200)
+    description = serializers.CharField(allow_blank=True, required=False)
+    state = serializers.CharField(max_length=100)
+    photos = serializers.ListField(child=serializers.URLField(), allow_empty=True, required=False)
+    rating = serializers.FloatField(min_value=0.0, max_value=5.0)  # Assuming rating is between 0 and 5
+    number_of_person_views = serializers.IntegerField(default=0)
+    price = serializers.FloatField(min_value=0.0)
+    best_time = serializers.CharField(allow_blank=True, required=False)
+    additional_info = serializers.CharField(allow_blank=True, required=False)
+    category = serializers.ChoiceField(choices=HiddenGem.CATEGORY_CHOICES)
+
     def create(self, validated_data):
+        """Create a new HiddenGem instance with validated data."""
         return HiddenGem.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
+        """Update an existing HiddenGem instance."""
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         return instance
-## delete
+
 
 from rest_framework import serializers
 from .models import Guide
@@ -286,3 +290,24 @@ class BookingHistorySerializer(serializers.Serializer):
         instance.number_of_persons = validated_data.get('number_of_persons', instance.number_of_persons)
         instance.save()
         return instance
+
+
+class TransactionSerializer(serializers.Serializer):
+    booking_id = serializers.CharField(required=True)
+    transaction_success = serializers.BooleanField(required=True)
+
+    def validate(self, data):
+        booking_id = data.get('booking_id')
+        transaction_success = data.get('transaction_success')
+
+        # Check if the booking exists
+        try:
+            booking = BookingHistory.objects.get(id=booking_id)
+        except BookingHistory.DoesNotExist:
+            raise serializers.ValidationError("Booking with this ID does not exist.")
+
+        # Check if the transaction failed
+        if not transaction_success:
+            raise serializers.ValidationError("Transaction Failed.")
+
+        return data

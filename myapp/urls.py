@@ -1,4 +1,3 @@
-
 from django.urls import path
 from . import views
 urlpatterns = [
@@ -6,7 +5,7 @@ urlpatterns = [
     path('signup/', views.RegisterUserView.as_view()),
     path('verify-otp/', views.VerifyOTPAndRegisterView.as_view()),
     path('login/' , views.Loginuser.as_view()),
-    path('users/', views.get_all_users),
+    # path('users/', views.get_all_users),
 
     # admin API's
     path('hidden_gems/', views.HiddenGemList.as_view()),
@@ -20,9 +19,13 @@ urlpatterns = [
     path('custom-package/',views.CreateCustomPackage.as_view()),
     # Booking API's
     path('booking-history/',views.BookingHistoryListCreateView.as_view()),
+    path('booking-history1/', views.UserBookingHistory.as_view()),
+
     path('bookhiddengem/',views.BookHiddenGem.as_view()),
     path('bookcustompackage/' , views.BookCustomPackage.as_view()),
     # Review and rating API's'
+    path('trasaction/', views.TransactionView.as_view(), name='transaction'),
+    path('cancel_booking/' , views.CancelBooking.as_view(), name='cancel-booking'),
     path('reviews/', views.ReviewListAPIView.as_view(), name='review-list'),
     path('reviews/create/', views.ReviewCreateAPIView.as_view(), name='review-create'),
 
@@ -30,7 +33,9 @@ urlpatterns = [
     path('drivers/', views.DriverListCreateView.as_view(), name='driver-list-create'),
     path('drivers/<str:pk>/', views.DriverRetrieveUpdateDestroyView.as_view(), name='driver-detail'),
 
+
 #     cab API's
     path('cabs/', views.CabListCreateView.as_view(), name='cab-list-create'),
     path('cabs/<str:pk>/', views.CabDetailView.as_view(), name='cab-detail'),
+    path('cab_book/', views.BookCabView.as_view())
 ]
