@@ -23,9 +23,13 @@ urlpatterns = [
 
     path('bookhiddengem/',views.BookHiddenGem.as_view()),
     path('bookcustompackage/' , views.BookCustomPackage.as_view()),
+    path('bookstaticpackage/' , views.BookStaticPackage.as_view()),
     # Review and rating API's'
     path('trasaction/', views.TransactionView.as_view(), name='transaction'),
     path('cancel_booking/' , views.CancelBooking.as_view(), name='cancel-booking'),
+
+    path('add_static_package/' , views.StaticPackageList.as_view(), name='add-static'),
+
     path('reviews/', views.ReviewListAPIView.as_view(), name='review-list'),
     path('reviews/create/', views.ReviewCreateAPIView.as_view(), name='review-create'),
 

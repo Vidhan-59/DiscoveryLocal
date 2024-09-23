@@ -1,9 +1,12 @@
 
 from django.http import HttpResponse
-from .serializers import RegisterSerializer, LoginSerializer, DriverSerializer, CabSerializer, TransactionSerializer
+from typer.cli import state
+
+from .serializers import RegisterSerializer, LoginSerializer, DriverSerializer, CabSerializer, TransactionSerializer, \
+    StaticPackageSerializer
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-from .models import User, Token, Review, Driver, Cab, Transaction
+from .models import User, Token, Review, Driver, Cab, Transaction, StaticPackage
 import uuid
 import bcrypt
 from .models import HiddenGem
@@ -180,16 +183,41 @@ class HiddenGemList(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        gems = HiddenGem.objects.all()
-        serializer = HiddenGemSerializer(gems, many=True)
+        # Default behavior to fetch top-rated places in GET request
+        gems_query = HiddenGem.objects.order_by('-rating')
+        serializer = HiddenGemSerializer(gems_query, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        serializer = HiddenGemSerializer(data=request.data)
-        if serializer.is_valid():
-            gem = serializer.save()
-            return Response(HiddenGemSerializer(gem).data, status=status.HTTP_201_CREATED)
-        return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if the request contains category filters for search
+        if 'category' in request.data or 'top_rated' in request.data:
+            # Fetch category filter from the request data (array)
+            category_filters = request.data.get('category', None)  # Expecting category as an array in the body
+            top_rated = request.data.get('top_rated', True)  # Defaults to true
+
+            # Base query for HiddenGems
+            gems_query = HiddenGem.objects.all()
+
+            # Apply category filter if provided
+            if category_filters:
+                gems_query = gems_query.filter(category__in=category_filters)
+
+            # Sort by top-rated if top_rated is true
+            if top_rated:
+                gems_query = gems_query.order_by('-rating')
+
+            # Serialize and return the filtered response
+            serializer = HiddenGemSerializer(gems_query, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        else:
+            # If no search filters are provided, treat it as a request to add a new HiddenGem
+            serializer = HiddenGemSerializer(data=request.data)
+            if serializer.is_valid():
+                gem = serializer.save()
+                return Response(HiddenGemSerializer(gem).data, status=status.HTTP_201_CREATED)
+            return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class HiddenGemDetail(APIView):
@@ -234,8 +262,6 @@ class HiddenGemDetail(APIView):
         gem.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-
-# guide API
 
 
 class GuideListCreateAPIView(APIView):
@@ -307,7 +333,26 @@ class GuideDetailAPIView(APIView):
 # package API's
 
 def serialize_custom_package(package):
-    """Convert ObjectId fields to strings."""
+    """Convert ObjectId fields to strings and include itinerary with hidden gem details."""
+    itinerary = []
+    for day, place in enumerate(package.places, start=1):
+        # Assume each place has associated hidden gems (can be fetched or stored in place).
+        # hidden_gems = [{
+        #     "id": str(hidden_gem.id),
+        #     "name": hidden_gem.name,
+        #     "description": hidden_gem.description
+        # } for hidden_gem in HiddenGem.objects(state=place.state).limit(3)]  # Assuming 3 hidden gems per place
+
+        itinerary.append({
+            "day": day,
+            "place": {
+                "id": str(place.id),
+                "name": place.name,
+                "description": place.description,
+
+            }
+        })
+
     return {
         "id": str(package.id),
         "name": package.name,
@@ -317,8 +362,10 @@ def serialize_custom_package(package):
         "number_of_persons": package.number_of_persons,
         "user": str(package.user.id),
         "booked_at": package.booked_at.isoformat(),
-        "guide": str(package.guide.id) if package.guide else None
+        "guide": str(package.guide.id) if package.guide else None,
+        "itinerary": itinerary  # Add the itinerary with places and hidden gems
     }
+
 
 class CreateCustomPackage(APIView):
     permission_classes = [IsAuthenticatedUser]
@@ -456,12 +503,19 @@ class BookCustomPackage(APIView):
 
         # Get data from the request
         package_id = request.data.get('package_id')
-        pg = CustomPackage.objects.get(id=package_id)
-        number_of_persons = int(pg.number_of_persons)  # Default to 1 person if not provided
-        print(number_of_persons)
+        travel_date_str = request.data.get('travel_date')  # Get the travel date from the request
+
+        if not travel_date_str:
+            return Response({"error": "Travel date is required."}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
+            # Parse the travel date string to a datetime object
+            travel_date = datetime.strptime(travel_date_str, '%Y-%m-%d')
+
             # Retrieve the CustomPackage by ID
             custom_package = CustomPackage.objects.get(id=package_id)
+
+            number_of_persons = int(custom_package.number_of_persons)  # Default to number of persons in the package
 
             # Ensure that the number of persons is valid
             if number_of_persons <= 0:
@@ -473,6 +527,7 @@ class BookCustomPackage(APIView):
                 package=custom_package,
                 guide=custom_package.guide,
                 booking_date=now(),
+                travel_date=travel_date,  # Store the travel date
                 price=custom_package.price,
                 number_of_persons=number_of_persons
             )
@@ -493,7 +548,7 @@ class BookCustomPackage(APIView):
 
             response_data = {
                 "message": "Custom package booked successfully!",
-                "booking_id" : str(booking_history_entry.id),
+                "booking_id": str(booking_history_entry.id),
                 "package_details": serialize_custom_package(custom_package),
                 "cab_details": cab_details,
                 "driver_details": driver_details
@@ -503,6 +558,8 @@ class BookCustomPackage(APIView):
 
         except CustomPackage.DoesNotExist:
             return Response({"error": "CustomPackage not found."}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError:
+            return Response({"error": "Invalid travel date format. Please use 'YYYY-MM-DD'."}, status=status.HTTP_400_BAD_REQUEST)
         except DoesNotExist:
             return Response({"error": "Guide, cab, or driver not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -786,6 +843,77 @@ class BookingHistoryListCreateView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class BookStaticPackage(APIView):
+    permission_classes = [IsAuthenticatedUser]
+
+    def post(self, request):
+        user = request.user
+        package_id = request.data.get('package_id')
+        number_of_persons = request.data.get('number_of_persons')
+        travel_date = request.data.get('travel_date')
+
+        # Validate input
+        if not package_id or not isinstance(number_of_persons, int) or number_of_persons <= 0 or not travel_date:
+            return Response({"error": "Invalid input."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Retrieve the Package by ID
+            package = StaticPackage.objects.get(id=package_id)
+            print(package)
+
+            # Check if there's an existing booking history for this user
+            booking_history_entry = BookingHistory.objects.filter(user=user, status='BOOKED').order_by('-booking_date').first()
+
+            if booking_history_entry:
+                return Response({"error": "User already has an active booking."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Create a new booking history entry
+            booking_history_entry = BookingHistory(
+                user=user,
+                static_package=package,
+                price=package.price,
+                booking_date=timezone.now(),
+                travel_date=travel_date,
+                number_of_persons=number_of_persons
+            )
+
+            # Check availability and update slots
+            travel_date_str = travel_date[:10]  # Format as YYYY-MM-DD
+            print(travel_date_str)
+            print(package.slots[travel_date_str])
+
+            if travel_date_str in package.slots:
+                available_slots = package.slots[travel_date_str]
+                if available_slots >= number_of_persons:
+                    package.slots[travel_date_str] -= number_of_persons
+                else:
+                    return Response({"error": "Not enough slots available."}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({"error": "No slots available for the selected date."},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            package.save()  # Save changes to package slots
+            booking_history_entry.save()  # Save booking history entry
+
+            response_data = {
+                "message": "Package booked successfully!",
+                "booking_history": {
+                    "booking_id": str(booking_history_entry.id),
+                    "user": str(user.id),
+                    "package_id": str(package.id),
+                    "price": booking_history_entry.price,
+                    "booking_date": booking_history_entry.booking_date,
+                    "travel_date": booking_history_entry.travel_date,
+                    "status": booking_history_entry.status,
+                    "number_of_persons": booking_history_entry.number_of_persons
+                }
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+
+        except StaticPackage.DoesNotExist:
+            return Response({"error": "Package not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 ###################################################################
 class BookCabView(APIView):
     permission_classes = [IsAuthenticatedUser]
@@ -860,9 +988,7 @@ class TransactionView(APIView):
             booking_id = serializer.validated_data.get('booking_id')
             transaction_success = serializer.validated_data.get('transaction_success')
             amount = BookingHistory.objects.get(id=booking_id).price
-
             try:
-                # Retrieve the booking history entry based on the booking_id
                 booking_history_entry = BookingHistory.objects.get(id=booking_id)
 
                 # Create a new transaction record
@@ -873,8 +999,6 @@ class TransactionView(APIView):
                     amount=amount,
                     transaction_success=transaction_success
                 )
-
-                # Update the transaction status based on the transaction_success flag
                 transaction.update_status()
 
                 # Save transaction reference in booking history
@@ -923,7 +1047,6 @@ class CancelBooking(APIView):
             # Check if the booking can be canceled before 10 days of the travel date
             if days_until_travel < 10:
                 return Response({"error": "Cannot cancel booking before 10 days of travel."}, status=status.HTTP_400_BAD_REQUEST)
-                return Response({"error": "Cannot cancel booking before 10 days of travel."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Mark the booking as canceled
             booking.status = 'CANCELLED'
@@ -939,3 +1062,74 @@ class CancelBooking(APIView):
             return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+from mongoengine import Q
+from rest_framework.response import Response
+from rest_framework import status
+
+
+class StaticPackageList(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        # Retrieve all static packages
+        queryset = StaticPackage.objects.all()
+        serializer = StaticPackageSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        # Check if it's a package creation request
+        if 'name' in request.data:
+            serializer = StaticPackageSerializer(data=request.data)
+            if serializer.is_valid():
+                static_package = serializer.save()
+                return Response(StaticPackageSerializer(static_package).data, status=status.HTTP_201_CREATED)
+            return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Extract filters from request body
+        categories = request.data.get('category', [])  # List of categories
+        package_types = request.data.get('type', [])  # List of package types
+        date_filter = request.data.get('date', None)  # Date filter
+        rating = float(request.data.get('rating', 0))  # Minimum rating
+        query = request.data.get('q', None)  # Search query
+
+        # Log request data for debugging
+        print(f"Request Data: {request.data}")
+
+        queryset = StaticPackage.objects.all()
+
+        # Apply rating filter
+        if rating > 0 and request.data.get('rating'):
+            queryset = queryset.filter(rating__gte=rating)
+
+        # Apply category filter if provided
+        if categories and request.data.get('category'):
+            print(f"Categories: {categories}")  # Debugging output
+            queryset = queryset.filter(category__in=categories)
+
+        # Apply package type filter if provided
+        if package_types and request.data.get('type'):
+            print(f"Package Types: {package_types}")  # Debugging output
+            queryset = queryset.filter(type__in=package_types)
+
+        # Apply date filter if provided
+        if date_filter and request.data.get('date'):
+            print(f"Date Filter: {date_filter}")  # Debugging output
+            queryset = queryset.filter(available_dates__contains=date_filter)
+
+        # Apply search query if provided
+        if query:
+            print(f"Search Query: {query}")  # Debugging output
+            queryset = queryset.filter(
+                Q(name__icontains=query) |
+                Q(description__icontains=query) |
+                Q(state__icontains=query)
+            )
+
+        # Log final queryset before serialization
+        print(f"Filtered Queryset: {queryset}")
+
+        # Serialize and return filtered queryset
+        serializer = StaticPackageSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

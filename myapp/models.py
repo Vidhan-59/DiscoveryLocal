@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 
 class HiddenGem(me.Document):
     CATEGORY_CHOICES = ('ADVENTURE', 'BEACH', 'MOUNTAIN', 'HISTORICAL', 'URBAN', 'WILDLIFE')
-
     name = me.StringField(required=True, max_length=200 , unique=True)
     description = me.StringField()
     state = me.StringField(required=True, max_length=100)
@@ -14,10 +13,9 @@ class HiddenGem(me.Document):
     price = me.FloatField()
     best_time = me.StringField()
     additional_info = me.StringField()
-    category = me.StringField(required=True, choices=CATEGORY_CHOICES)  # Enum for category
+    category = me.StringField(required=True, choices=CATEGORY_CHOICES)
 
-    def is_available(self, date):
-        return date in self.available_dates
+
 
     meta = {
         'collection': 'hidden_gems',
@@ -217,12 +215,55 @@ class Transaction(me.Document):
         else:
             self.status = 'FAILED'
         self.save()
+from mongoengine import Document, StringField, ListField, FloatField, IntField, EnumField, DateTimeField, DictField, \
+    ReferenceField
+
+
+class StaticPackage(Document):
+    CATEGORY_CHOICES = (
+        'ADVENTURE', 'BEACH', 'MOUNTAIN',
+        'HISTORICAL', 'URBAN', 'WILDLIFE'
+    )
+    TYPE_CHOICES = (
+        'LUXURY', 'DELUXE', 'ECONOMY'
+    )
+
+    name = StringField(required=True, max_length=200, unique=True)
+    description = StringField()
+    state = StringField(required=True, max_length=100)
+    photos = ListField(StringField())  # URLs for images
+    rating = FloatField()
+    number_of_person_views = IntField(default=0)  # Default to 0
+    price = FloatField()
+    best_time = StringField()
+    additional_info = StringField()
+    category = StringField(required=True, choices=CATEGORY_CHOICES)
+    type = StringField(choices=TYPE_CHOICES, required=True)
+
+    available_dates = ListField(DateTimeField())  # Dates when the package is available
+    slots = DictField()  # Dictionary to hold available slots for each day
+    itinerary = ListField(DictField())  # Day-wise itinerary with images
+
+    def is_available(self, date):
+        return date in self.available_dates
+
+class ItineraryItem(Document):
+    day = IntField(required=True)  # Day number in the itinerary
+    description = StringField()
+    images = ListField(StringField())  # URLs for images related to the day's itinerary
+    static_package = ReferenceField(StaticPackage)  # Link back to the StaticPackage
+
+    meta = {
+        'collection': 'itinerary_items'
+    }
+
 
 
 class BookingHistory(me.Document):
     user = me.ReferenceField(User, null=True)
     gem = me.ReferenceField(HiddenGem, null=True)
     package = me.ReferenceField(CustomPackage, null=True)
+    static_package = me.ReferenceField(StaticPackage ,null=True)
     guide = me.ReferenceField(Guide, null=True)
     cab = me.ReferenceField(Cab, null=True)
     booking_date = me.DateTimeField(default=datetime.utcnow)
@@ -244,3 +285,4 @@ class BookingHistory(me.Document):
             self.save()
         else:
             raise ValueError("Cannot cancel booking after 10 days.")
+

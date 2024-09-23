@@ -311,3 +311,55 @@ class TransactionSerializer(serializers.Serializer):
             raise serializers.ValidationError("Transaction Failed.")
 
         return data
+
+
+
+
+from rest_framework import serializers
+from .models import StaticPackage  # Ensure this is your MongoEngine model
+
+class StaticPackageSerializer(serializers.Serializer):
+    id = serializers.CharField(required=False)  # Adjust based on your ID type
+    name = serializers.CharField(max_length=200)
+    description = serializers.CharField(required=False, allow_blank=True)
+    state = serializers.CharField(max_length=100)
+    photos = serializers.ListField(child=serializers.URLField())
+    rating = serializers.FloatField()
+    number_of_person_views = serializers.IntegerField(default=0)
+    price = serializers.FloatField()
+    best_time = serializers.CharField(required=False, allow_blank=True)
+    additional_info = serializers.CharField(required=False, allow_blank=True)
+    category = serializers.ChoiceField(choices=[
+        'ADVENTURE', 'BEACH', 'MOUNTAIN',
+        'HISTORICAL', 'URBAN', 'WILDLIFE'
+    ])
+    type = serializers.ChoiceField(choices=[
+        'LUXURY', 'DELUXE', 'ECONOMY'
+    ])
+    available_dates = serializers.ListField(child=serializers.DateTimeField())
+    slots = serializers.DictField()
+    itinerary = serializers.ListField(child=serializers.DictField())
+
+    def validate_name(self, value):
+        """Check that the name is unique."""
+        if StaticPackage.objects(name=value).first() is not None:
+            raise serializers.ValidationError("This name is already in use.")
+        return value
+
+    def validate_rating(self, value):
+        """Ensure the rating is between 0 and 5."""
+        if not (0 <= value <= 5):
+            raise serializers.ValidationError("Rating must be between 0 and 5.")
+        return value
+
+    def validate_price(self, value):
+        """Ensure the price is positive."""
+        if value < 0:
+            raise serializers.ValidationError("Price must be a positive value.")
+        return value
+
+    def create(self, validated_data):
+        """Create and return a new `StaticPackage` instance."""
+        static_package = StaticPackage(**validated_data)
+        static_package.save()
+        return static_package
