@@ -45,6 +45,7 @@ class Loginuser(APIView):
             # Authenticate user
             user = User.objects.get(username=username)
 
+
             # Create or retrieve the token
             # Generate a new token key
             token_key = str(uuid.uuid4())
@@ -65,13 +66,21 @@ class Loginuser(APIView):
                     expires_at=datetime.utcnow() + timedelta(days=7)  # Set expiration to 7 days
                 )
                 token.save()
-            user = token.user
+            # user = token.user
             # Retrieve the username
             username = user.username
             print(username)
+            if(username == 'admin' and bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8'))):
+                return Response({
+                    'message': 'Login successful',
+                    'token': token.key,
+                    'username'  :username
+                }, status=200)
+
             return Response({
                 'message': 'Login successful',
-                'token': token.key
+                'token': token.key,
+                'username' : username
             }, status=200)
 
         else:
@@ -190,28 +199,7 @@ class HiddenGemList(APIView):
 
     def post(self, request):
         # Check if the request contains category filters for search
-        # if 'category' in request.data or 'top_rated' in request.data:
-        #     # Fetch category filter from the request data (array)
-        #     category_filters = request.data.get('category', None)  # Expecting category as an array in the body
-        #     top_rated = request.data.get('top_rated', True)  # Defaults to true
-        #
-        #     # Base query for HiddenGems
-        #     gems_query = HiddenGem.objects.all()
-        #
-        #     # Apply category filter if provided
-        #     if category_filters:
-        #         gems_query = gems_query.filter(category__in=category_filters)
-        #
-        #     # Sort by top-rated if top_rated is true
-        #     if top_rated:
-        #         gems_query = gems_query.order_by('-rating')
-        #
-        #     # Serialize and return the filtered response
-        #     serializer = HiddenGemSerializer(gems_query, many=True)
-        #     return Response(serializer.data, status=status.HTTP_200_OK)
-        #
-        # else:
-            # If no search filters are provided, treat it as a request to add a new HiddenGem
+        if 'name' in request.data:
             print(request.data)
             serializer = HiddenGemSerializer(data=request.data)
             if serializer.is_valid():
@@ -219,6 +207,29 @@ class HiddenGemList(APIView):
                 gem = serializer.save()
                 return Response(HiddenGemSerializer(gem).data, status=status.HTTP_201_CREATED)
             return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        else:
+            # If no search filters are provided, treat it as a request to add a new HiddenGem
+            # Fetch category filter from the request data (array)
+            category_filters = request.data.get('category', None)  # Expecting category as an array in the body
+            top_rated = request.data.get('top_rated', True)  # Defaults to true
+
+            # Base query for HiddenGems
+            gems_query = HiddenGem.objects.all()
+
+            # Apply category filter if provided
+            if category_filters:
+                gems_query = gems_query.filter(category__in=category_filters)
+
+            # Sort by top-rated if top_rated is true
+            if top_rated:
+                gems_query = gems_query.order_by('-rating')
+
+            # Serialize and return the filtered response
+            serializer = HiddenGemSerializer(gems_query, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 
 
@@ -270,19 +281,24 @@ class GuideListCreateAPIView(APIView):
     permission_classes = [IsAuthenticatedUser]
 
     def get(self, request):
-        """
-        Retrieve all guides. Only accessible to admin users.
-        """
-        guides = Guide.objects.all()
-        serializer = GuideSerializer(guides, many=True)
+        user = request.user
+        # Retrieve the latest booking for the user
+        booking_history_entry = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+
+        # Check if booking is for a gem or package and get the cabs accordingly
+        if booking_history_entry and booking_history_entry.gem and booking_history_entry.gem.state:
+            guide = Guide.objects.filter(state=booking_history_entry.gem.state)
+        elif booking_history_entry and booking_history_entry.package and booking_history_entry.package.state:
+            guide = Guide.objects.filter(state=booking_history_entry.package.state)
+        else:
+            return Response({"error": "State information is missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Serialize the Cab objects
+        serializer = GuideSerializer(guide, many=True)  # many=True as it could return multiple cabs
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        self.permission_classes = [IsAdminUser]
-        self.check_permissions(request)
-        """
-        Create a new guide. Only accessible to admin users.
-        """
+        self.permission_classes = [AllowAny]
         serializer = GuideSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -599,7 +615,7 @@ class ReviewListAPIView(APIView):
     permission_classes = [IsAuthenticatedUser]
 
     def post(self, request, *args, **kwargs):
-        place_id = request.data.get('place')
+        place_id = request.data.get('place_id')
 
         if not place_id:
             return Response({'detail': 'Place ID is required in the request body.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -631,12 +647,24 @@ class ReviewListAPIView(APIView):
 
 
 class DriverListCreateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedUser]
 
     def get(self, request):
-        drivers = Driver.objects.all()
-        serializer = DriverSerializer(drivers, many=True)
-        return Response(serializer.data)
+        user = request.user
+        # Retrieve the latest booking for the user
+        booking_history_entry = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+
+        # Check if booking is for a gem or package and get the cabs accordingly
+        if booking_history_entry and booking_history_entry.gem and booking_history_entry.gem.state:
+            driver = Driver.objects.filter(state=booking_history_entry.gem.state)
+        elif booking_history_entry and booking_history_entry.package and booking_history_entry.package.state:
+            driver = Driver.objects.filter(state=booking_history_entry.package.state)
+        else:
+            return Response({"error": "State information is missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Serialize the Cab objects
+        serializer = DriverSerializer(driver, many=True)  # many=True as it could return multiple cabs
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = DriverSerializer(data=request.data)
@@ -679,12 +707,24 @@ class DriverRetrieveUpdateDestroyView(APIView):
 
 
 class CabListCreateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedUser]
 
     def get(self, request):
-        cabs = Cab.objects.all()
-        serializer = CabSerializer(cabs, many=True)
-        return Response(serializer.data)
+        user = request.user
+        # Retrieve the latest booking for the user
+        booking_history_entry = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+
+        # Check if booking is for a gem or package and get the cabs accordingly
+        if booking_history_entry and booking_history_entry.gem and booking_history_entry.gem.state:
+            cabs = Cab.objects.filter(state=booking_history_entry.gem.state)
+        elif booking_history_entry and booking_history_entry.package and booking_history_entry.package.state:
+            cabs = Cab.objects.filter(state=booking_history_entry.package.state)
+        else:
+            return Response({"error": "State information is missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Serialize the Cab objects
+        serializer = CabSerializer(cabs, many=True)  # many=True as it could return multiple cabs
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = CabSerializer(data=request.data)
@@ -937,6 +977,7 @@ class BookCabView(APIView):
 
             # Update the booking history with the selected cab
             booking_history_entry.cab = cab
+            booking_history_entry.price += cab.price
             booking_history_entry.save()
 
             response_data = {
@@ -1081,8 +1122,10 @@ class StaticPackageList(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
+
         # Check if it's a package creation request
         if 'name' in request.data:
+            print(request.data)
             serializer = StaticPackageSerializer(data=request.data)
             if serializer.is_valid():
                 static_package = serializer.save()
@@ -1135,3 +1178,77 @@ class StaticPackageList(APIView):
         # Serialize and return filtered queryset
         serializer = StaticPackageSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # permission_classes = [IsAuthenticatedUser]
+    #
+    # def post(self, request):
+    #     user = request.user
+    #     print(user.id)
+    #     cab_id = request.data.get('cab_id')
+    #
+    #     try:
+    #         # Retrieve the Cab by ID
+    #         cab = Cab.objects.get(id=cab_id)
+    #
+    #         # Check if there's an existing booking history for this user
+    #         booking_history_entry = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+    #
+    #         if not booking_history_entry:
+    #             return Response({"error": "No existing booking history found for the user."}, status=status.HTTP_400_BAD_REQUEST)
+    #
+    #         # Update the booking history with the selected cab
+    #         booking_history_entry.cab = cab
+    #         booking_history_entry.price += cab.price
+    #         booking_history_entry.save()
+    #
+    #         response_data = {
+    #             "message": "Cab added to booking history successfully!",
+    #             "booking_history": {
+    #                 "user": str(user.id),
+    #                 "package": str(booking_history_entry.package.id) if booking_history_entry.package else None,
+    #                 "gem": str(booking_history_entry.gem.id) if booking_history_entry.gem else None,
+    #                 "guide": str(booking_history_entry.guide.id) if booking_history_entry.guide else None,
+    #                 "cab": str(booking_history_entry.cab.id) if booking_history_entry.cab else None,
+    #                 "booking_date": booking_history_entry.booking_date,
+    #                 "price": booking_history_entry.price,
+    #                 "number_of_persons": booking_history_entry.number_of_persons
+    #             }
+    #         }
+    #
+    #         return Response(response_data, status=status.HTTP_200_OK)
+    #
+    #     except Cab.DoesNotExist:
+    #         return Response({"error": "Cab not found."}, status=status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class BookGuideAPIView(APIView):
+    permission_classes = [IsAuthenticatedUser]
+
+    def post(self, request):
+        user = request.user
+        guide_id = request.data.get('guide_id')
+        print(guide_id)
+        try:
+            # Query by the _id field instead of guide_id
+            guide = Guide.objects.get(id=guide_id)
+
+            # Fetch the latest booking history entry for the user
+            booking_history_entry = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+            if not booking_history_entry:
+                return Response({"error": "No existing booking history found for the user."},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            # Update booking with the guide and adjust the price
+
+            booking_history_entry.guide = guide
+            booking_history_entry.price += guide.price
+            booking_history_entry.save()
+
+            return Response({"message": "Guide booked successfully"}, status=status.HTTP_200_OK)
+
+        except Guide.DoesNotExist:
+            return Response({"error": "Guide not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

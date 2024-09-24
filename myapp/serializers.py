@@ -135,10 +135,14 @@ from rest_framework import serializers
 from .models import Guide
 
 class GuideSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    name = serializers.CharField()
+    id = serializers.CharField()  # ObjectId will be handled automatically by MongoDB
+    name = serializers.CharField(max_length=200)
     price = serializers.FloatField()
     available_dates = serializers.ListField(child=serializers.DateTimeField())
+    rating = serializers.FloatField(required=False)
+    state = serializers.CharField(max_length=50 ,required=False)  # Assuming `state` is related to `HiddenGem` and you want to show its name
+    image = serializers.ListField(child=serializers.URLField(), required=False)
+
     def create(self, validated_data):
         return Guide.objects.create(**validated_data)
 
@@ -159,30 +163,6 @@ class CustomPackageSerializer(serializers.Serializer):
     guide = GuideSerializer()  # Assuming guide is optional
 
 
-class BookingHistorySerializer(serializers.Serializer):
-
-    package = CustomPackageSerializer()  # Include detailed package info
-    gem = HiddenGemSerializer()  # Include gem details if applicable
-    guide = serializers.CharField(source='guide.name', required=False)
-    booking_date = serializers.DateTimeField()
-    price = serializers.FloatField()
-    guide_price = serializers.FloatField(required=False)
-    number_of_persons = serializers.IntegerField(required=False)
-
-    def get_gem(self, obj):
-        if obj.gem:
-            return HiddenGemSerializer(obj.gem).data
-        return None
-
-    def get_package(self, obj):
-        if obj.package:
-            return CustomPackageSerializer(obj.package).data
-        return None
-
-    def get_guide(self, obj):
-        if obj.guide:
-            return GuideSerializer(obj.guide).data
-        return None
 
 
 
@@ -330,6 +310,7 @@ class TransactionSerializer(serializers.Serializer):
 from rest_framework import serializers
 from .models import StaticPackage  # Ensure this is your MongoEngine model
 
+
 class StaticPackageSerializer(serializers.Serializer):
     id = serializers.CharField(required=False)  # Adjust based on your ID type
     name = serializers.CharField(max_length=200)
@@ -349,8 +330,21 @@ class StaticPackageSerializer(serializers.Serializer):
         'LUXURY', 'DELUXE', 'ECONOMY'
     ])
     available_dates = serializers.ListField(child=serializers.DateTimeField())
-    slots = serializers.DictField()
+
+    # Update slots to validate keys (fetch first 10 characters) and values (integers)
+    slots = serializers.DictField(child=serializers.IntegerField())
+
     itinerary = serializers.ListField(child=serializers.DictField())
+
+    def to_internal_value(self, data):
+        """Convert incoming string data to the appropriate types."""
+        if 'rating' in data:
+            data['rating'] = float(data['rating'])
+        if 'number_of_person_views' in data:
+            data['number_of_person_views'] = int(data['number_of_person_views'])
+        if 'price' in data:
+            data['price'] = float(data['price'])
+        return data
 
     def validate_name(self, value):
         """Check that the name is unique."""
@@ -370,8 +364,68 @@ class StaticPackageSerializer(serializers.Serializer):
             raise serializers.ValidationError("Price must be a positive value.")
         return value
 
+    def validate_slots(self, value):
+        """
+        Ensure that each slot key is truncated to the first 10 characters
+        and each value is an integer.
+        """
+        new_slots = {}
+        for key, val in value.items():
+            truncated_key = key[:10]  # Fetch only the first 10 characters
+            if not isinstance(val, int):
+                raise serializers.ValidationError(f"Slot value for '{truncated_key}' must be an integer.")
+            new_slots[truncated_key] = val  # Store the truncated key and value
+
+        return new_slots  # Return the modified slots dictionary
+
     def create(self, validated_data):
         """Create and return a new `StaticPackage` instance."""
         static_package = StaticPackage(**validated_data)
         static_package.save()
         return static_package
+
+
+
+class BookingHistorySerializer(serializers.Serializer):
+    package = CustomPackageSerializer(required=False)  # Include detailed package info
+    static_package = StaticPackageSerializer(required=False)  # Include static package details if applicable
+    gem = HiddenGemSerializer(required=False)  # Include gem details if applicable
+    guide = serializers.CharField(source='guide.name', required=False)  # Guide name if applicable
+    cab = serializers.CharField(source='cab.name', required=False)  # Cab name if applicable
+    booking_date = serializers.DateTimeField()  # Booking date
+    price = serializers.FloatField()  # Price for the booking
+    guide_price = serializers.FloatField(required=False)  # Guide price if applicable
+    number_of_persons = serializers.IntegerField(required=False)  # Number of persons for the booking
+    transaction = serializers.CharField(source='transaction.id', required=False)  # Transaction ID
+    travel_date = serializers.DateTimeField()  # Travel date
+    status = serializers.CharField()  # Booking status (BOOKED, CANCELLED, PENDING)
+
+    def get_gem(self, obj):
+        if obj.gem:
+            return HiddenGemSerializer(obj.gem).data
+        return None
+
+    def get_package(self, obj):
+        if obj.package:
+            return CustomPackageSerializer(obj.package).data
+        return None
+
+    def get_static_package(self, obj):
+        if obj.static_package:
+            return StaticPackageSerializer(obj.static_package).data
+        return None
+
+    def get_guide(self, obj):
+        if obj.guide:
+            return GuideSerializer(obj.guide).data
+        return None
+
+    def get_cab(self, obj):
+        if obj.cab:
+            return CabSerializer(obj.cab).data
+        return None
+
+    def get_transaction(self, obj):
+        if obj.transaction:
+            return TransactionSerializer(obj.transaction).data
+        return None

@@ -33,7 +33,7 @@ class Guide(me.Document):
     available_dates = me.ListField(me.DateTimeField())
 
     rating = me.FloatField()
-    state = me.ReferenceField(HiddenGem)
+    state = me.StringField(required=True, max_length=200)
     image = me.ListField(me.URLField() , required=False)
 
     meta = {
@@ -231,7 +231,7 @@ class StaticPackage(Document):
     name = StringField(required=True, max_length=200, unique=True)
     description = StringField()
     state = StringField(required=True, max_length=100)
-    photos = ListField(StringField())  # URLs for images
+    photos = ListField(StringField() , required=False)  # URLs for images
     rating = FloatField()
     number_of_person_views = IntField(default=0)  # Default to 0
     price = FloatField()
@@ -250,7 +250,7 @@ class StaticPackage(Document):
 class ItineraryItem(Document):
     day = IntField(required=True)  # Day number in the itinerary
     description = StringField()
-    images = ListField(StringField())  # URLs for images related to the day's itinerary
+    images = ListField(StringField() ,required=False)  # URLs for images related to the day's itinerary
     static_package = ReferenceField(StaticPackage)  # Link back to the StaticPackage
 
     meta = {

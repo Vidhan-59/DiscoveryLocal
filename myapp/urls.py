@@ -14,6 +14,7 @@ urlpatterns = [
     # Guide API's
     path('guides/', views.GuideListCreateAPIView.as_view()),
     path('guides/<str:pk>/', views.GuideDetailAPIView.as_view()),
+    path('book-guide/', views.BookGuideAPIView.as_view(), name='book-guide'),
 
     # custompackage API's
     path('custom-package/',views.CreateCustomPackage.as_view()),
