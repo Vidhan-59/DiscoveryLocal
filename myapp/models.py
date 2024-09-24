@@ -7,7 +7,7 @@ class HiddenGem(me.Document):
     name = me.StringField(required=True, max_length=200 , unique=True)
     description = me.StringField()
     state = me.StringField(required=True, max_length=100)
-    photos = me.ListField(me.URLField())
+    photos = me.ListField(me.URLField(), required=False)
     rating = me.FloatField()
     number_of_person_views = me.IntField(default=0)  # Default to 0
     price = me.FloatField()

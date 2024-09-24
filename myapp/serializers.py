@@ -107,7 +107,19 @@ class HiddenGemSerializer(serializers.Serializer):
     additional_info = serializers.CharField(allow_blank=True, required=False)
     category = serializers.ChoiceField(choices=HiddenGem.CATEGORY_CHOICES)
 
+    def to_internal_value(self, data):
+        """Convert incoming string data to the appropriate types."""
+        # Convert fields to appropriate types if they are strings
+        if 'rating' in data:
+            data['rating'] = float(data['rating'])
+        if 'number_of_person_views' in data:
+            data['number_of_person_views'] = int(data['number_of_person_views'])
+        if 'price' in data:
+            data['price'] = float(data['price'])
+
+        return super().to_internal_value(data)
     def create(self, validated_data):
+        print(validated_data)
         """Create a new HiddenGem instance with validated data."""
         return HiddenGem.objects.create(**validated_data)
 

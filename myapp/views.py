@@ -190,30 +190,32 @@ class HiddenGemList(APIView):
 
     def post(self, request):
         # Check if the request contains category filters for search
-        if 'category' in request.data or 'top_rated' in request.data:
-            # Fetch category filter from the request data (array)
-            category_filters = request.data.get('category', None)  # Expecting category as an array in the body
-            top_rated = request.data.get('top_rated', True)  # Defaults to true
-
-            # Base query for HiddenGems
-            gems_query = HiddenGem.objects.all()
-
-            # Apply category filter if provided
-            if category_filters:
-                gems_query = gems_query.filter(category__in=category_filters)
-
-            # Sort by top-rated if top_rated is true
-            if top_rated:
-                gems_query = gems_query.order_by('-rating')
-
-            # Serialize and return the filtered response
-            serializer = HiddenGemSerializer(gems_query, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-
-        else:
+        # if 'category' in request.data or 'top_rated' in request.data:
+        #     # Fetch category filter from the request data (array)
+        #     category_filters = request.data.get('category', None)  # Expecting category as an array in the body
+        #     top_rated = request.data.get('top_rated', True)  # Defaults to true
+        #
+        #     # Base query for HiddenGems
+        #     gems_query = HiddenGem.objects.all()
+        #
+        #     # Apply category filter if provided
+        #     if category_filters:
+        #         gems_query = gems_query.filter(category__in=category_filters)
+        #
+        #     # Sort by top-rated if top_rated is true
+        #     if top_rated:
+        #         gems_query = gems_query.order_by('-rating')
+        #
+        #     # Serialize and return the filtered response
+        #     serializer = HiddenGemSerializer(gems_query, many=True)
+        #     return Response(serializer.data, status=status.HTTP_200_OK)
+        #
+        # else:
             # If no search filters are provided, treat it as a request to add a new HiddenGem
+            print(request.data)
             serializer = HiddenGemSerializer(data=request.data)
             if serializer.is_valid():
+                print("saved")
                 gem = serializer.save()
                 return Response(HiddenGemSerializer(gem).data, status=status.HTTP_201_CREATED)
             return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
@@ -629,7 +631,7 @@ class ReviewListAPIView(APIView):
 
 
 class DriverListCreateView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [AllowAny]
 
     def get(self, request):
         drivers = Driver.objects.all()

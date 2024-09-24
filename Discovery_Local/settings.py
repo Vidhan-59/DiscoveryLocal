@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'cloudinary_storage',
     'cloudinary',
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
@@ -56,7 +57,25 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
 ]
+# CORS SETUP
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    # "http://localhost:5174/"
+]
+CORS_ALLOWED_ALL_ORIGINS = True
+CORS_ALLOW_HEADERS = (
+    "accept",
+    "authorization",
+    "content-type",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+)
+
+CORS_EXPOSE_HEADERS = ['Authorization']
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'Discovery_Local.urls'
 import os
