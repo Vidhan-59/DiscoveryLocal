@@ -12,6 +12,8 @@ urlpatterns = [
     path('hidden_gems/<str:pk>/', views.HiddenGemDetail.as_view()),
 
     # Guide API's
+    path('get_all_guides/' , views.GetAllGuides.as_view()),
+    path('get_all_cabs/' , views.GetAllCabs.as_view()),
     path('guides/', views.GuideListCreateAPIView.as_view()),
     path('guides/<str:pk>/', views.GuideDetailAPIView.as_view()),
     path('book-guide/', views.BookGuideAPIView.as_view(), name='book-guide'),
@@ -42,5 +44,7 @@ urlpatterns = [
 #     cab API's
     path('cabs/', views.CabListCreateView.as_view(), name='cab-list-create'),
     path('cabs/<str:pk>/', views.CabDetailView.as_view(), name='cab-detail'),
-    path('cab_book/', views.BookCabView.as_view())
+    path('cab_book/', views.BookCabView.as_view()),
+
+    path('userprofile/', views.UserBookingHistoryView.as_view(), name='user-booking-history'),
 ]

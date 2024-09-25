@@ -76,12 +76,14 @@ class Loginuser(APIView):
                     'token': token.key,
                     'username'  :username
                 }, status=200)
+            response = Response({
+                    'message': 'Login successful',
+                    'token': token.key,
+                    'username': username
+                },status=200)
+            response['Authorization'] = f'Token {token.key}'
+            return response
 
-            return Response({
-                'message': 'Login successful',
-                'token': token.key,
-                'username' : username
-            }, status=200)
 
         else:
             return Response(serializer.errors, status=400)
@@ -1252,3 +1254,50 @@ class BookGuideAPIView(APIView):
             return Response({"error": "Guide not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+class GetAllGuides(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):  # Add request parameter
+        guides = Guide.objects.all()
+        serializer = GuideSerializer(guides, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class GetAllCabs(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self , request, *args, **kwargs): # Add request
+        cabs = Cab.objects.all()
+        serializer = CabSerializer(cabs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+from .serializers import UserSerializer
+class UserBookingHistoryView(APIView):
+    permission_classes = [IsAuthenticatedUser]
+
+    def get(self, request):
+        try:
+            # Get the authenticated user from the request
+            user = request.user
+
+            # Fetch the user's booking history
+            bookings = BookingHistory.objects.filter(user=user)
+
+            # Serialize user data
+            user_serializer = UserSerializer(user)
+
+            # Serialize booking history data
+            booking_serializer = BookingHistorySerializer(bookings, many=True)
+
+            # Combine both user and booking history data
+            response_data = {
+                'user': user_serializer.data,
+                'booking_history': booking_serializer.data
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
