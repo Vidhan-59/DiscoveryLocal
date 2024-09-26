@@ -239,8 +239,7 @@ class StaticPackage(Document):
     additional_info = StringField()
     category = StringField(required=True, choices=CATEGORY_CHOICES)
     type = StringField(choices=TYPE_CHOICES, required=True)
-
-    available_dates = ListField(DateTimeField())  # Dates when the package is available
+    available_dates = ListField(DateTimeField())
     slots = DictField()  # Dictionary to hold available slots for each day
     itinerary = ListField(DictField())  # Day-wise itinerary with images
 

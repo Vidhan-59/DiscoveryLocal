@@ -292,6 +292,8 @@ class GuideListCreateAPIView(APIView):
             guide = Guide.objects.filter(state=booking_history_entry.gem.state)
         elif booking_history_entry and booking_history_entry.package and booking_history_entry.package.state:
             guide = Guide.objects.filter(state=booking_history_entry.package.state)
+        elif booking_history_entry and booking_history_entry.static_package and booking_history_entry.static_package.state:
+            guide = Guide.objects.filter(state=booking_history_entry.static_package.state)
         else:
             return Response({"error": "State information is missing."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -394,9 +396,10 @@ class CreateCustomPackage(APIView):
         user = request.user
 
         # Get data from the request
+        print(request.data)
         place_ids = request.data.get('places', [])
         guide_id = request.data.get('guide' , None)
-        number_of_persons = request.data.get('number_of_persons')  # Default to 1 if not provided
+        number_of_persons =int(request.data.get('number_of_persons'))  # Default to 1 if not provided
 
         # Ensure place_ids is a list of strings
         if not isinstance(place_ids, list):
@@ -453,6 +456,10 @@ class CreateCustomPackage(APIView):
             return Response({"error": "HiddenGem not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
 from django.utils.timezone import now
 from mongoengine import DoesNotExist
 
@@ -548,7 +555,7 @@ class BookCustomPackage(APIView):
                 guide=custom_package.guide,
                 booking_date=now(),
                 travel_date=travel_date,  # Store the travel date
-                price=custom_package.price,
+                price=(custom_package.price*number_of_persons),
                 number_of_persons=number_of_persons
             )
             booking_history_entry.save()
@@ -721,6 +728,8 @@ class CabListCreateView(APIView):
             cabs = Cab.objects.filter(state=booking_history_entry.gem.state)
         elif booking_history_entry and booking_history_entry.package and booking_history_entry.package.state:
             cabs = Cab.objects.filter(state=booking_history_entry.package.state)
+        elif booking_history_entry and booking_history_entry.static_package and booking_history_entry.static_package.state:
+            cabs = Cab.objects.filter(state=booking_history_entry.static_package.state)
         else:
             return Response({"error": "State information is missing."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -910,12 +919,12 @@ class BookStaticPackage(APIView):
 
             if booking_history_entry:
                 return Response({"error": "User already has an active booking."}, status=status.HTTP_400_BAD_REQUEST)
-
+            price = package.price*number_of_persons
             # Create a new booking history entry
             booking_history_entry = BookingHistory(
                 user=user,
                 static_package=package,
-                price=package.price,
+                price=price,
                 booking_date=timezone.now(),
                 travel_date=travel_date,
                 number_of_persons=number_of_persons
@@ -1271,6 +1280,7 @@ class GetAllCabs(APIView):
         serializer = CabSerializer(cabs, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 from .serializers import UserSerializer
+
 class UserBookingHistoryView(APIView):
     permission_classes = [IsAuthenticatedUser]
 
@@ -1285,13 +1295,13 @@ class UserBookingHistoryView(APIView):
             # Serialize user data
             user_serializer = UserSerializer(user)
 
-            # Serialize booking history data
+            # Serialize booking history data along with associated guide and cab details
             booking_serializer = BookingHistorySerializer(bookings, many=True)
 
             # Combine both user and booking history data
             response_data = {
                 'user': user_serializer.data,
-                'booking_history': booking_serializer.data
+                'booking_history': booking_serializer.data,
             }
 
             return Response(response_data, status=status.HTTP_200_OK)

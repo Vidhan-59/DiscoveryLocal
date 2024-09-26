@@ -230,58 +230,58 @@ class CabSerializer(serializers.Serializer):
         return instance
 
 
-class BookingHistorySerializer(serializers.Serializer):
-    user = UserSerializer()
-    gem = HiddenGemSerializer()
-    package = CustomPackageSerializer()
-    guide = GuideSerializer()
-    booking_date = serializers.DateTimeField()
-    price = serializers.FloatField()
-    number_of_persons = serializers.IntegerField()
-    cab = CabSerializer()
-
-    def create(self, validated_data):
-        user_data = validated_data.pop('user', None)
-        gem_data = validated_data.pop('gem', None)
-        package_data = validated_data.pop('package', None)
-        guide_data = validated_data.pop('guide', None)
-        cab_data = validated_data.pop('cab', None)
-
-        user = User.objects.get(id=user_data['id']) if user_data else None
-        gem = HiddenGem.objects.get(id=gem_data['id']) if gem_data else None
-        package = CustomPackage.objects.get(id=package_data['id']) if package_data else None
-        guide = Guide.objects.get(id=guide_data['id']) if guide_data else None
-        cab = Cab.objects.get(id=cab_data['id']) if cab_data else None
-
-        booking = BookingHistory(
-            user=user,
-            gem=gem,
-            package=package,
-            guide=guide,
-            cab=cab,
-            **validated_data
-        )
-        booking.save()
-        return booking
-
-    def update(self, instance, validated_data):
-        user_data = validated_data.pop('user', None)
-        gem_data = validated_data.pop('gem', None)
-        package_data = validated_data.pop('package', None)
-        guide_data = validated_data.pop('guide', None)
-        cab_data = validated_data.pop('cab', None)
-
-        instance.user = User.objects.get(id=user_data['id']) if user_data else instance.user
-        instance.gem = HiddenGem.objects.get(id=gem_data['id']) if gem_data else instance.gem
-        instance.package = CustomPackage.objects.get(id=package_data['id']) if package_data else instance.package
-        instance.guide = Guide.objects.get(id=guide_data['id']) if guide_data else instance.guide
-        instance.cab = Cab.objects.get(id=cab_data['id']) if cab_data else instance.cab
-
-        instance.booking_date = validated_data.get('booking_date', instance.booking_date)
-        instance.price = validated_data.get('price', instance.price)
-        instance.number_of_persons = validated_data.get('number_of_persons', instance.number_of_persons)
-        instance.save()
-        return instance
+# class BookingHistorySerializer(serializers.Serializer):
+#     user = UserSerializer()
+#     gem = HiddenGemSerializer()
+#     package = CustomPackageSerializer()
+#     guide = GuideSerializer()
+#     booking_date = serializers.DateTimeField()
+#     price = serializers.FloatField()
+#     number_of_persons = serializers.IntegerField()
+#     cab = CabSerializer()
+#
+#     def create(self, validated_data):
+#         user_data = validated_data.pop('user', None)
+#         gem_data = validated_data.pop('gem', None)
+#         package_data = validated_data.pop('package', None)
+#         guide_data = validated_data.pop('guide', None)
+#         cab_data = validated_data.pop('cab', None)
+#
+#         user = User.objects.get(id=user_data['id']) if user_data else None
+#         gem = HiddenGem.objects.get(id=gem_data['id']) if gem_data else None
+#         package = CustomPackage.objects.get(id=package_data['id']) if package_data else None
+#         guide = Guide.objects.get(id=guide_data['id']) if guide_data else None
+#         cab = Cab.objects.get(id=cab_data['id']) if cab_data else None
+#
+#         booking = BookingHistory(
+#             user=user,
+#             gem=gem,
+#             package=package,
+#             guide=guide,
+#             cab=cab,
+#             **validated_data
+#         )
+#         booking.save()
+#         return booking
+#
+#     def update(self, instance, validated_data):
+#         user_data = validated_data.pop('user', None)
+#         gem_data = validated_data.pop('gem', None)
+#         package_data = validated_data.pop('package', None)
+#         guide_data = validated_data.pop('guide', None)
+#         cab_data = validated_data.pop('cab', None)
+#
+#         instance.user = User.objects.get(id=user_data['id']) if user_data else instance.user
+#         instance.gem = HiddenGem.objects.get(id=gem_data['id']) if gem_data else instance.gem
+#         instance.package = CustomPackage.objects.get(id=package_data['id']) if package_data else instance.package
+#         instance.guide = Guide.objects.get(id=guide_data['id']) if guide_data else instance.guide
+#         instance.cab = Cab.objects.get(id=cab_data['id']) if cab_data else instance.cab
+#
+#         instance.booking_date = validated_data.get('booking_date', instance.booking_date)
+#         instance.price = validated_data.get('price', instance.price)
+#         instance.number_of_persons = validated_data.get('number_of_persons', instance.number_of_persons)
+#         instance.save()
+#         return instance
 
 
 class TransactionSerializer(serializers.Serializer):
@@ -385,47 +385,36 @@ class StaticPackageSerializer(serializers.Serializer):
         return static_package
 
 
-
 class BookingHistorySerializer(serializers.Serializer):
-    package = CustomPackageSerializer(required=False)  # Include detailed package info
-    static_package = StaticPackageSerializer(required=False)  # Include static package details if applicable
-    gem = HiddenGemSerializer(required=False)  # Include gem details if applicable
-    guide = serializers.CharField(source='guide.name', required=False)  # Guide name if applicable
-    cab = serializers.CharField(source='cab.name', required=False)  # Cab name if applicable
-    booking_date = serializers.DateTimeField()  # Booking date
-    price = serializers.FloatField()  # Price for the booking
-    guide_price = serializers.FloatField(required=False)  # Guide price if applicable
-    number_of_persons = serializers.IntegerField(required=False)  # Number of persons for the booking
-    transaction = serializers.CharField(source='transaction.id', required=False)  # Transaction ID
-    travel_date = serializers.DateTimeField()  # Travel date
-    status = serializers.CharField()  # Booking status (BOOKED, CANCELLED, PENDING)
+    id = serializers.CharField()  # Assuming you want the ID
+    gem = HiddenGemSerializer(allow_null=True)  # Example field, adjust as necessary
+    package = CustomPackageSerializer(allow_null=True)  # Example field, adjust as necessary
+    static_package = StaticPackageSerializer(allow_null=True)  # Example field, adjust as necessary
+    guide = GuideSerializer(allow_null=True)  # Nested GuideSerializer
+    cab = CabSerializer(allow_null=True)  # Nested CabSerializer
+    booking_date = serializers.DateTimeField()
+    price = serializers.FloatField()
+    number_of_persons = serializers.IntegerField(default=0)
+    status = serializers.ChoiceField(choices=['BOOKED', 'CANCELLED', 'PENDING'], default='PENDING')
+    travel_date = serializers.DateTimeField()
 
-    def get_gem(self, obj):
-        if obj.gem:
-            return HiddenGemSerializer(obj.gem).data
-        return None
+    def create(self, validated_data):
+        # Custom create logic here
+        return BookingHistory.objects.create(**validated_data)
 
-    def get_package(self, obj):
-        if obj.package:
-            return CustomPackageSerializer(obj.package).data
-        return None
+    def update(self, instance, validated_data):
+        # Custom update logic here
+        instance.gem = validated_data.get('gem', instance.gem)
+        instance.package = validated_data.get('package', instance.package)
+        instance.static_package = validated_data.get('static_package', instance.static_package)
 
-    def get_static_package(self, obj):
-        if obj.static_package:
-            return StaticPackageSerializer(obj.static_package).data
-        return None
+        if 'guide' in validated_data:
+            guide_data = validated_data.pop('guide')
+            # Handle nested serializer for guide if needed
 
-    def get_guide(self, obj):
-        if obj.guide:
-            return GuideSerializer(obj.guide).data
-        return None
+        if 'cab' in validated_data:
+            cab_data = validated_data.pop('cab')
+            # Handle nested serializer for cab if needed
 
-    def get_cab(self, obj):
-        if obj.cab:
-            return CabSerializer(obj.cab).data
-        return None
-
-    def get_transaction(self, obj):
-        if obj.transaction:
-            return TransactionSerializer(obj.transaction).data
-        return None
+        instance.save()
+        return instance
