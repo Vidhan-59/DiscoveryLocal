@@ -71,11 +71,13 @@ class Loginuser(APIView):
             username = user.username
             print(username)
             if(username == 'admin' and bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8'))):
-                return Response({
+                response =  Response({
                     'message': 'Login successful',
                     'token': token.key,
                     'username'  :username
                 }, status=200)
+                response['Authorization'] = f'Token {token.key}'
+                return response
             response = Response({
                     'message': 'Login successful',
                     'token': token.key,
@@ -119,6 +121,13 @@ def get_all_users(request):
 
     return JsonResponse({"error": "Only admin can access"}, status=401)
 
+class Logoutuser(APIView):
+    permission_classes = [IsAuthenticatedUser]
+    def post(self, request):
+        user = request.user
+        token = Token.objects(user=user).first()
+        token.delete()
+        return Response({'message': 'Logged out successfully'}, status=200)
 
 class RegisterUserView(APIView):
     permission_classes = [AllowAny]
@@ -252,7 +261,7 @@ class HiddenGemDetail(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request, pk):
-        self.permission_classes = [IsAdminUser]
+        self.permission_classes = [AllowAny]
         self.check_permissions(request)
 
         gem = self.get_object(pk)
@@ -267,7 +276,7 @@ class HiddenGemDetail(APIView):
         return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        self.permission_classes = [IsAdminUser]
+        self.permission_classes = [AllowAny]
         self.check_permissions(request)
 
         gem = self.get_object(pk)
@@ -901,25 +910,27 @@ class BookStaticPackage(APIView):
 
     def post(self, request):
         user = request.user
-        package_id = request.data.get('package_id')
-        number_of_persons = request.data.get('number_of_persons')
-        travel_date = request.data.get('travel_date')
+        package_id = str(request.data.get('package_id'))
+        number_of_persons = int(request.data.get('number_of_persons'))
+        travel_date = str(request.data.get('travel_date'))
 
         # Validate input
+
         if not package_id or not isinstance(number_of_persons, int) or number_of_persons <= 0 or not travel_date:
             return Response({"error": "Invalid input."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # Retrieve the Package by ID
             package = StaticPackage.objects.get(id=package_id)
-            print(package)
+            print(package.name)
 
             # Check if there's an existing booking history for this user
-            booking_history_entry = BookingHistory.objects.filter(user=user, status='BOOKED').order_by('-booking_date').first()
-
-            if booking_history_entry:
-                return Response({"error": "User already has an active booking."}, status=status.HTTP_400_BAD_REQUEST)
+            # booking_history_entry = BookingHistory.objects.filter(user=user, status='BOOKED').order_by('-booking_date').first()
+            #
+            # if booking_history_entry:
+            #     return Response({"error": "User already has an active booking."}, status=status.HTTP_400_BAD_REQUEST)
             price = package.price*number_of_persons
+            print(price)
             # Create a new booking history entry
             booking_history_entry = BookingHistory(
                 user=user,
@@ -1311,3 +1322,41 @@ class UserBookingHistoryView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StaticPackageDetail(APIView):
+    permission_classes = [AllowAny]
+    """
+    Retrieve, update, or delete a static package instance.
+    """
+
+    def get_object(self, pk):
+        try:
+            return StaticPackage.objects.get(id=pk)
+        except DoesNotExist:
+            return None
+
+    def patch(self, request, pk):
+        """
+        Partially update a StaticPackage instance.
+        """
+        package = self.get_object(pk)
+        if package is None:
+            return Response({"error": "StaticPackage not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = StaticPackageSerializer(package, data=request.data, partial=True)  # Allow partial updates
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        """
+        Delete a StaticPackage instance.
+        """
+        package = self.get_object(pk)
+        if package is None:
+            return Response({"error": "StaticPackage not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        package.delete()
+        return Response({"message": "StaticPackage deleted successfully."}, status=status.HTTP_204_NO_CONTENT)

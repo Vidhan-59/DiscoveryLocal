@@ -418,3 +418,88 @@ class BookingHistorySerializer(serializers.Serializer):
 
         instance.save()
         return instance
+from dateutil import parser
+
+class StaticPackageSerializer(serializers.Serializer):
+    id = serializers.CharField(required=False)  # Adjust based on your ID type
+    name = serializers.CharField(max_length=200)
+    description = serializers.CharField(required=False, allow_blank=True)
+    state = serializers.CharField(max_length=100)
+    photos = serializers.ListField(child=serializers.URLField())
+    rating = serializers.FloatField()
+    number_of_person_views = serializers.IntegerField(default=0)
+    price = serializers.FloatField()
+    best_time = serializers.CharField(required=False, allow_blank=True)
+    additional_info = serializers.CharField(required=False, allow_blank=True)
+    category = serializers.ChoiceField(choices=[
+        'ADVENTURE', 'BEACH', 'MOUNTAIN',
+        'HISTORICAL', 'URBAN', 'WILDLIFE'
+    ])
+    type = serializers.ChoiceField(choices=[
+        'LUXURY', 'DELUXE', 'ECONOMY'
+    ])
+    available_dates = serializers.ListField(child=serializers.CharField())
+
+    # Update slots to validate keys (fetch first 10 characters) and values (integers)
+    slots = serializers.DictField(child=serializers.IntegerField())
+    itinerary = serializers.ListField(child=serializers.DictField())
+
+    def to_internal_value(self, data):
+        """Convert incoming string data to the appropriate types."""
+        if 'rating' in data:
+            data['rating'] = float(data['rating'])
+        if 'number_of_person_views' in data:
+            data['number_of_person_views'] = int(data['number_of_person_views'])
+        if 'price' in data:
+            data['price'] = float(data['price'])
+
+        # Convert available_dates to proper datetime objects
+        if 'available_dates' in data:
+            try:
+                data['available_dates'] = [parser.parse(date_str) for date_str in data['available_dates']]
+            except (ValueError, TypeError):
+                raise serializers.ValidationError("Invalid date format in available_dates.")
+
+        return data
+
+    def validate_name(self, value):
+        """Check that the name is unique."""
+        if StaticPackage.objects(name=value).first() is not None:
+            raise serializers.ValidationError("This name is already in use.")
+        return value
+
+    def validate_rating(self, value):
+        """Ensure the rating is between 0 and 5."""
+        if not (0 <= value <= 5):
+            raise serializers.ValidationError("Rating must be between 0 and 5.")
+        return value
+
+    def validate_price(self, value):
+        """Ensure the price is positive."""
+        if value < 0:
+            raise serializers.ValidationError("Price must be a positive value.")
+        return value
+
+    def validate_slots(self, value):
+        """Ensure that each slot key is truncated to the first 10 characters and each value is an integer."""
+        new_slots = {}
+        for key, val in value.items():
+            truncated_key = key[:10]  # Fetch only the first 10 characters
+            if not isinstance(val, int):
+                raise serializers.ValidationError(f"Slot value for '{truncated_key}' must be an integer.")
+            new_slots[truncated_key] = val  # Store the truncated key and value
+
+        return new_slots  # Return the modified slots dictionary
+
+    def create(self, validated_data):
+        """Create and return a new StaticPackage instance."""
+        static_package = StaticPackage(**validated_data)
+        static_package.save()
+        return static_package
+
+    def update(self, instance, validated_data):
+        """Update and return an existing StaticPackage instance."""
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance

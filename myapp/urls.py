@@ -5,6 +5,8 @@ urlpatterns = [
     path('signup/', views.RegisterUserView.as_view()),
     path('verify-otp/', views.VerifyOTPAndRegisterView.as_view()),
     path('login/' , views.Loginuser.as_view()),
+    path('logout/' , views.Logoutuser.as_view()),
+
     # path('users/', views.get_all_users),
 
     # admin API's
@@ -23,8 +25,9 @@ urlpatterns = [
     # Booking API's
     path('booking-history/',views.BookingHistoryListCreateView.as_view()),
     path('booking-history1/', views.UserBookingHistory.as_view()),
+    path('static_package/<str:pk>/', views.StaticPackageDetail.as_view(), name='static-package-detail'),
 
-        path('bookhiddengem/',views.BookHiddenGem.as_view()),
+    path('bookhiddengem/',views.BookHiddenGem.as_view()),
     path('bookcustompackage/' , views.BookCustomPackage.as_view()),
     path('bookstaticpackage/' , views.BookStaticPackage.as_view()),
     # Review and rating API's'
