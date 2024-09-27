@@ -32,6 +32,7 @@ urlpatterns = [
     path('bookstaticpackage/' , views.BookStaticPackage.as_view()),
     # Review and rating API's'
     path('trasaction/', views.TransactionView.as_view(), name='transaction'),
+    path('verify-transaction/', views.VerifyOTPAndTransactionView.as_view(), name='verify-transaction/'),
     path('cancel_booking/' , views.CancelBooking.as_view(), name='cancel-booking'),
 
     path('add_static_package/' , views.StaticPackageList.as_view(), name='add-static'),

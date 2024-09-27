@@ -269,7 +269,7 @@ class BookingHistory(me.Document):
     price = me.FloatField()
     number_of_persons = me.IntField(default=0)  # Field to store the number of persons booked
     transaction = me.ReferenceField('Transaction', null=True)  # Reference to the transaction record
-    status = me.StringField(choices=('BOOKED', 'CANCELLED' , 'PENDING'), default='PENDING')
+    status = me.StringField(choices=('BOOKED', 'CANCELLED' , 'PENDING', 'FAILED'), default='PENDING')
     package = me.ReferenceField(CustomPackage, null=True, required=False)
     travel_date = me.DateTimeField(required=True)  # Add travel date field
     meta = {

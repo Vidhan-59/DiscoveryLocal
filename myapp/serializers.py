@@ -16,10 +16,22 @@ class ObjectIdField(serializers.Field):
         # Convert string to ObjectId for deserialization
         return bson.ObjectId(data) if isinstance(data, str) else data
 
-
 class OTPSerializer(serializers.Serializer):
-    email = serializers.EmailField()
     otp = serializers.CharField()
+
+    def validate(self, attrs):
+        # Retrieve the email from context
+        email = self.context.get('email')
+        if not email:
+            raise serializers.ValidationError('Email not provided in context.')
+
+        # # Check if an OTP exists for the given email
+        # otp_record = OTP.objects.filter(email=email, otp=attrs['otp']).first()
+        # if not otp_record or otp_record.is_expired():
+        #     raise serializers.ValidationError('Invalid or expired OTP.')
+
+        # If everything is fine, return validated data
+        return attrs
 
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=100)

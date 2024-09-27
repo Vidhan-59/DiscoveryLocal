@@ -1,4 +1,4 @@
-
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpResponse
 from typer.cli import state
 
@@ -163,21 +163,26 @@ class VerifyOTPAndRegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = OTPSerializer(data=request.data)
+        data = request.data
+        user_email = request.data.get('email') # Get the user's email
+
+        # Pass user email in the context
+        serializer = OTPSerializer(data=data, context={'email': user_email})
         if not serializer.is_valid():
             return Response({'error': 'Invalid OTP or email'}, status=400)
 
         data = serializer.validated_data
-        otp_record = OTP.objects(email=data['email'], otp=data['otp']).first()
+        otp_record = OTP.objects(otp=data['otp']).first()
 
         if not otp_record or otp_record.is_expired():
             return Response({'error': 'Invalid or expired OTP'}, status=400)
 
         # Remove the OTP after successful verification
-        OTP.objects(email=data['email']).delete()
+        email = OTP.objects(otp=data['otp']).first().email
+        OTP.objects(otp=data['otp']).delete()
         hashed_password = bcrypt.hashpw(request.data['password'].encode('utf-8'), bcrypt.gensalt())
         user = User.objects.create(
-            email=data['email'],
+            email=email,
             contact_number=request.data['contact_number'],
             username=request.data['username'],
             password=hashed_password.decode('utf-8'),  # Make sure to hash the password
@@ -1047,42 +1052,193 @@ class UserBookingHistory(APIView):
 
 class TransactionView(APIView):
     permission_classes = [IsAuthenticatedUser]
+
+    def get(self, request):
+        user = request.user
+        print(user.username)
+        try:
+            latest_booking = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+            if latest_booking is not None:
+                return Response({'amount': latest_booking.price}, status=status.HTTP_200_OK)
+            else:
+                return Response({'detail': 'No bookings found for this user.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def post(self, request):
-        serializer = TransactionSerializer(data=request.data)
-        if serializer.is_valid():
-            booking_id = serializer.validated_data.get('booking_id')
-            transaction_success = serializer.validated_data.get('transaction_success')
-            amount = BookingHistory.objects.get(id=booking_id).price
-            try:
-                booking_history_entry = BookingHistory.objects.get(id=booking_id)
-
-                # Create a new transaction record
-                transaction = Transaction(
-                    user=booking_history_entry.user,
-                    hidden_gem=booking_history_entry.gem,
-                    package=booking_history_entry.package,
-                    amount=amount,
-                    transaction_success=transaction_success
-                )
-                transaction.update_status()
-
-                # Save transaction reference in booking history
-                booking_history_entry.transaction = transaction
-                booking_history_entry.status= 'BOOKED'
-                booking_history_entry.save()
-
-                # Return success response
+        try:
+            user = request.user
+            # Get the latest booking history entry for the user
+            booking_history_entry = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+            if booking_history_entry is None:
                 return Response({
-                    "message": "Transaction updated successfully",
-                    "transaction_id": str(transaction.id)
-                }, status=status.HTTP_200_OK)
-
-            except DoesNotExist:
-                return Response({
-                    "error": "Booking with the given ID does not exist."
+                    "error": "No booking history found for this user."
                 }, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get the price from the booking history entry
+            price = booking_history_entry.price  # Directly use the price from the booking entry
+
+            # Create a new transaction record
+            transaction = Transaction(
+                user=booking_history_entry.user,
+                hidden_gem=booking_history_entry.gem,
+                package=booking_history_entry.package,
+                amount=price,
+                transaction_success=True
+            )
+            transaction.update_status()
+
+            # Save transaction reference in booking history
+            booking_history_entry.transaction = transaction
+            booking_history_entry.status = 'PENDING'
+            booking_history_entry.save()
+
+            # Generate OTP code
+            otp_code = str(random.randint(100000, 999999))
+
+            # Store the OTP in the database
+            OTP.objects.create(email=booking_history_entry.user.email, otp=otp_code)
+
+            # Send OTP via email
+            send_mail(
+                'Your OTP Code',
+                f'Your OTP code is {otp_code}. It will expire in 5 minutes.',
+                'Dungeon0559@gmail.com',  # Replace with your email
+                [booking_history_entry.user.email],
+                fail_silently=False,
+            )
+
+            # Return a response indicating that OTP has been sent
+            return Response({
+                "message": "OTP sent to user. Please verify to continue the payment."
+            }, status=status.HTTP_200_OK)
+
+        except DoesNotExist:
+            return Response({
+                "error": "Booking with the given ID does not exist."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class VerifyOTPAndTransactionView(APIView):
+    permission_classes = [IsAuthenticatedUser]
+
+    def post(self, request):
+        data = request.data
+        user_email = request.user.email  # Get the user's email
+
+        # Pass user email in the context
+        serializer = OTPSerializer(data=data, context={'email': user_email})
+
+        if not serializer.is_valid():
+            return Response({'error': 'Invalid OTP or email'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        otp = serializer.validated_data['otp']
+        print(otp)
+        otp_record = OTP.objects(otp=otp).order_by('-created_at').first()
+        print(otp_record)
+        if not otp_record or otp_record.is_expired():
+            # If OTP is invalid or expired, set transaction status to "PENDING" and return response
+            self.set_transaction_status_to_pending(request.user)
+            return Response({'error': 'Invalid or expired OTP. Transaction status set to pending.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Remove the OTP after successful verification
+        OTP.objects(otp=otp).delete()
+
+        # Proceed with transaction processing
+        user = request.user
+        booking_history_entry = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+
+        if not booking_history_entry:
+            return Response({'error': 'No booking history found for user.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            # Create a new transaction record
+            transaction = Transaction(
+                user=booking_history_entry.user,
+                hidden_gem=booking_history_entry.gem,
+                package=booking_history_entry.package,
+                amount=booking_history_entry.price,  # Assuming price is the amount
+                transaction_success=True
+            )
+            transaction.update_status()  # Implement this method as needed
+
+            # Save transaction reference in booking history
+            booking_history_entry.transaction = transaction
+            booking_history_entry.status = 'BOOKED'
+            booking_history_entry.save()
+
+            # Return success response
+            return Response({
+                "message": "Transaction completed successfully",
+                "transaction_id": str(transaction.id)
+            }, status=status.HTTP_200_OK)
+
+        except ObjectDoesNotExist:
+            return Response({'error': 'Booking with the given ID does not exist.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            # Log the exception if necessary
+            return Response({'error': 'An unexpected error occurred. Please try again later.'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def set_transaction_status_to_pending(self, user):
+        # Handle logic to set transaction status to "PENDING"
+        booking_history_entry = BookingHistory.objects.filter(user=user).order_by('-booking_date').first()
+        if booking_history_entry:
+            transaction = Transaction(
+                user=booking_history_entry.user,
+                hidden_gem=booking_history_entry.gem,
+                package=booking_history_entry.package,
+                amount=booking_history_entry.price,
+                transaction_success=False  # Mark as not successful
+            )
+            transaction.update_status()  # Implement this method as needed
+
+
+            booking_history_entry.transaction = transaction
+            booking_history_entry.status = 'FAILED'
+            booking_history_entry.save()
+
+
+    # def post(self, request):
+    #     serializer = TransactionSerializer(data=request.data)
+    #     if serializer.is_valid():
+    #         booking_id = serializer.validated_data.get('booking_id')
+    #         transaction_success = serializer.validated_data.get('transaction_success')
+    #         amount = BookingHistory.objects.get(id=booking_id).price
+    #         try:
+    #             booking_history_entry = BookingHistory.objects.get(id=booking_id)
+    #
+    #             # Create a new transaction record
+    #             transaction = Transaction(
+    #                 user=booking_history_entry.user,
+    #                 hidden_gem=booking_history_entry.gem,
+    #                 package=booking_history_entry.package,
+    #                 amount=amount,
+    #                 transaction_success=transaction_success
+    #             )
+    #             transaction.update_status()
+    #
+    #             # Save transaction reference in booking history
+    #             booking_history_entry.transaction = transaction
+    #             booking_history_entry.status= 'BOOKED'
+    #             booking_history_entry.save()
+    #
+    #             # Return success response
+    #             return Response({
+    #                 "message": "Transaction updated successfully",
+    #                 "transaction_id": str(transaction.id)
+    #             }, status=status.HTTP_200_OK)
+    #
+    #         except DoesNotExist:
+    #             return Response({
+    #                 "error": "Booking with the given ID does not exist."
+    #             }, status=status.HTTP_400_BAD_REQUEST)
+    #     else:
+    #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 from django.utils import timezone
